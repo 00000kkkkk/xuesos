@@ -1,11 +1,15 @@
 package codegen
 
 import (
+	_ "embed"
 	"fmt"
 	"strings"
 
 	"github.com/00000kkkkk/xusesosplusplus/parser"
 )
+
+//go:embed runtime/runtime.c
+var runtimeC string
 
 // CCodegen generates C code from the AST.
 type CCodegen struct {
@@ -38,27 +42,10 @@ func (g *CCodegen) Generate(program *parser.Program) string {
 		}
 	}
 
-	// Emit headers
-	g.writeln("#include <stdio.h>")
-	g.writeln("#include <stdlib.h>")
-	g.writeln("#include <string.h>")
-	g.writeln("#include <math.h>")
-	g.writeln("#include <stdint.h>")
-	g.writeln("#include <stdbool.h>")
-	g.writeln("")
-
-	// Emit string helper
-	g.writeln("typedef struct { char *data; int64_t len; } XppString;")
-	g.writeln("XppString xpp_str(const char *s) { XppString r; r.data = (char*)s; r.len = strlen(s); return r; }")
-	g.writeln("XppString xpp_str_concat(XppString a, XppString b) {")
-	g.writeln("  XppString r; r.len = a.len + b.len; r.data = malloc(r.len+1);")
-	g.writeln("  memcpy(r.data, a.data, a.len); memcpy(r.data+a.len, b.data, b.len+1); return r;")
-	g.writeln("}")
-	g.writeln("int xpp_streq(const char* a, const char* b) { return strcmp(a, b) == 0; }")
-	g.writeln("")
-	// Error handling support for try/catch
-	g.writeln("static int _xpp_has_error = 0;")
-	g.writeln("static const char* _xpp_error_msg = \"\";")
+	// Emit runtime library (includes all headers, types, and helpers)
+	// The runtime provides: XppString*, XppArray*, XppMap*, xpp_print_*,
+	// xpp_string_new/concat/eq, error handling globals, etc.
+	g.writeln(runtimeC)
 	g.writeln("")
 
 	// Forward declare all functions
@@ -142,7 +129,9 @@ func (g *CCodegen) mapType(typeName string) string {
 	case "bool":
 		return "bool"
 	case "str":
-		return "XppString"
+		return "XppString*"
+	case "[]str":
+		return "XppArray*"
 	case "char":
 		return "char"
 	case "byte":
@@ -445,14 +434,12 @@ func (g *CCodegen) emitXuiatch(s *parser.XuiatchStatement) {
 			} else {
 				g.write("if (")
 			}
-			// Use strcmp for string patterns, == for integers
+			// Use xpp_string_eq for string patterns, == for integers
 			if _, ok := arm.Pattern.(*parser.StringLiteral); ok {
-				g.write("strcmp(")
-				g.emitExpression(s.Value)
-				g.write(", ")
 				sl := arm.Pattern.(*parser.StringLiteral)
-				g.write(fmt.Sprintf("%q", sl.Value))
-				g.write(") == 0")
+				g.write("xpp_string_eq(")
+				g.emitExpression(s.Value)
+				g.write(fmt.Sprintf(", xpp_string_new(%q))", sl.Value))
 			} else {
 				g.write("(")
 				g.emitExpression(s.Value)
@@ -505,7 +492,7 @@ func (g *CCodegen) emitExpression(expr parser.Expression) {
 	case *parser.FloatLiteral:
 		g.write(fmt.Sprintf("%s", e.Raw))
 	case *parser.StringLiteral:
-		g.write(fmt.Sprintf("%q", e.Value))
+		g.write(fmt.Sprintf("xpp_string_new(%q)", e.Value))
 	case *parser.CharLiteral:
 		g.write(fmt.Sprintf("'%c'", e.Value))
 	case *parser.BoolLiteral:
@@ -584,7 +571,7 @@ func (g *CCodegen) emitInfix(e *parser.InfixExpression) {
 			if e.Operator == "!=" {
 				g.write("!")
 			}
-			g.write("xpp_streq(")
+			g.write("xpp_string_eq(")
 			g.emitExpression(e.Left)
 			g.write(", ")
 			g.emitExpression(e.Right)
@@ -593,11 +580,9 @@ func (g *CCodegen) emitInfix(e *parser.InfixExpression) {
 		}
 	}
 
-	// String concatenation — not directly supported in C, emit a comment placeholder
-	// For simple cases we can use snprintf pattern, but keep it minimal
+	// String concatenation using runtime library
 	if e.Operator == "+" && (leftIsStr || rightIsStr) {
-		// Emit as a runtime concat helper call
-		g.write("xpp_str_concat(")
+		g.write("xpp_string_concat(")
 		g.emitExpression(e.Left)
 		g.write(", ")
 		g.emitExpression(e.Right)
@@ -679,42 +664,44 @@ func (g *CCodegen) emitPrintCall(args []parser.Expression) {
 		return
 	}
 
-	// Simple case: single argument
+	// Single argument: use xpp_print_* runtime functions
 	if len(args) == 1 {
 		arg := args[0]
 		switch e := arg.(type) {
 		case *parser.StringLiteral:
-			g.write(fmt.Sprintf(`printf("%%s\n", %q)`, e.Value))
+			g.write(fmt.Sprintf("xpp_print_string(xpp_string_new(%q))", e.Value))
 		case *parser.IntegerLiteral:
-			g.write(fmt.Sprintf(`printf("%%lld\n", (long long)%dLL)`, e.Value))
+			g.write(fmt.Sprintf("xpp_print_int(%dLL)", e.Value))
 		case *parser.FloatLiteral:
-			g.write(fmt.Sprintf(`printf("%%f\n", %s)`, e.Raw))
+			g.write(fmt.Sprintf("xpp_print_float(%s)", e.Raw))
 		case *parser.BoolLiteral:
 			if e.Value {
-				g.write(`printf("%s\n", "true")`)
+				g.write("xpp_print_bool(true)")
 			} else {
-				g.write(`printf("%s\n", "false")`)
+				g.write("xpp_print_bool(false)")
 			}
 		case *parser.Identifier:
-			if t, ok := g.varTypes[e.Value]; ok && t == "const char*" {
-				g.write(fmt.Sprintf(`printf("%%s\n", %s)`, e.Value))
+			if t, ok := g.varTypes[e.Value]; ok && t == "XppString*" {
+				g.write(fmt.Sprintf("xpp_print_string(%s)", e.Value))
 			} else if t == "double" {
-				g.write(fmt.Sprintf(`printf("%%f\n", %s)`, e.Value))
+				g.write(fmt.Sprintf("xpp_print_float(%s)", e.Value))
 			} else if t == "bool" {
-				g.write(fmt.Sprintf(`printf("%%s\n", %s ? "true" : "false")`, e.Value))
+				g.write(fmt.Sprintf("xpp_print_bool(%s)", e.Value))
+			} else if t == "char" {
+				g.write(fmt.Sprintf("xpp_print_char(%s)", e.Value))
 			} else {
-				g.write(fmt.Sprintf(`printf("%%lld\n", (long long)%s)`, e.Value))
+				g.write(fmt.Sprintf("xpp_print_int(%s)", e.Value))
 			}
 		case *parser.InterpolatedString:
 			g.emitPrintInterpolated(e)
 		default:
 			// Check if the expression looks like a string type
 			if g.isStringTypedExpr(arg) {
-				g.write(`printf("%s\n", `)
+				g.write("xpp_print_string(")
 				g.emitExpression(arg)
 				g.write(")")
 			} else {
-				g.write(`printf("%lld\n", (long long)`)
+				g.write("xpp_print_int(")
 				g.emitExpression(arg)
 				g.write(")")
 			}
@@ -750,7 +737,7 @@ func (g *CCodegen) printfFormatFor(arg parser.Expression) string {
 	if ident, ok := arg.(*parser.Identifier); ok {
 		if t, ok := g.varTypes[ident.Value]; ok {
 			switch t {
-			case "const char*":
+			case "XppString":
 				return "%s"
 			case "double":
 				return "%f"
@@ -765,20 +752,24 @@ func (g *CCodegen) printfFormatFor(arg parser.Expression) string {
 func (g *CCodegen) emitPrintArg(arg parser.Expression) {
 	switch e := arg.(type) {
 	case *parser.StringLiteral:
-		g.write(fmt.Sprintf("%q", e.Value))
+		g.write(fmt.Sprintf("xpp_string_new(%q)->data", e.Value))
 	case *parser.BoolLiteral:
 		if e.Value {
-			g.write(`"true"`)
+			g.write(`"xuitru"`)
 		} else {
-			g.write(`"false"`)
+			g.write(`"xuinia"`)
 		}
 	case *parser.Identifier:
 		if t, ok := g.varTypes[e.Value]; ok {
 			if t == "bool" {
-				g.write(fmt.Sprintf(`%s ? "true" : "false"`, e.Value))
+				g.write(fmt.Sprintf(`%s ? "xuitru" : "xuinia"`, e.Value))
 				return
 			}
-			if t == "const char*" || t == "double" {
+			if t == "XppString*" {
+				g.write(fmt.Sprintf("%s->data", e.Value))
+				return
+			}
+			if t == "double" {
 				g.write(e.Value)
 				return
 			}
@@ -822,7 +813,7 @@ func (g *CCodegen) isStringTypedExpr(expr parser.Expression) bool {
 	}
 	if ident, ok := expr.(*parser.Identifier); ok {
 		if t, ok := g.varTypes[ident.Value]; ok {
-			return t == "const char*"
+			return t == "XppString*"
 		}
 	}
 	if infix, ok := expr.(*parser.InfixExpression); ok {
@@ -895,7 +886,7 @@ func (g *CCodegen) inferCType(expr parser.Expression, declaredType string) strin
 	case *parser.FloatLiteral:
 		return "double"
 	case *parser.StringLiteral:
-		return "const char*"
+		return "XppString*"
 	case *parser.BoolLiteral:
 		return "bool"
 	case *parser.CharLiteral:
@@ -906,24 +897,24 @@ func (g *CCodegen) inferCType(expr parser.Expression, declaredType string) strin
 		return "struct " + e.Name
 	case *parser.InfixExpression:
 		if e.Operator == "+" && (isStringExpr(e.Left) || isStringExpr(e.Right)) {
-			return "const char*"
+			return "XppString*"
 		}
 		// Check if either side is a known string variable
 		if e.Operator == "+" {
 			if ident, ok := e.Left.(*parser.Identifier); ok {
-				if g.varTypes[ident.Value] == "const char*" {
-					return "const char*"
+				if g.varTypes[ident.Value] == "XppString" {
+					return "XppString*"
 				}
 			}
 			if ident, ok := e.Right.(*parser.Identifier); ok {
-				if g.varTypes[ident.Value] == "const char*" {
-					return "const char*"
+				if g.varTypes[ident.Value] == "XppString" {
+					return "XppString*"
 				}
 			}
 		}
 		return "int64_t"
 	case *parser.InterpolatedString:
-		return "const char*"
+		return "XppString*"
 	case *parser.CallExpression:
 		return "int64_t"
 	case *parser.Identifier:
@@ -940,7 +931,3 @@ func isStringExpr(expr parser.Expression) bool {
 	return ok
 }
 
-// xpp_string_eq for string comparison in generated code
-func init() {
-	// This is just a marker — the actual function is in runtime.c
-}

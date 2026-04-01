@@ -82,11 +82,11 @@ func runBuild(args []string) error {
 	if compiler == "" {
 		fmt.Printf("Generated C code: %s\n", cFile)
 		fmt.Println("No C compiler found (gcc/cc). Compile manually:")
-		fmt.Printf("  gcc -o %s %s -lm\n", outputName, cFile)
+		fmt.Printf("  gcc -o %s %s -lm -lpthread\n", outputName, cFile)
 		return nil
 	}
 
-	cmd := exec.Command(compiler, "-o", outputName, cFile, "-lm")
+	cmd := exec.Command(compiler, "-o", outputName, cFile, "-lm", "-lpthread")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

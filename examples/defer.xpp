@@ -1,0 +1,39 @@
+// Defer in Xuesos++ (like Go defer)
+
+xuen read_file(path str) str {
+    print("Opening: {path}")
+    xudefer print("Closing: {path}")
+
+    xuet content = io_read_file(path)
+    print("Read {string_len(content)} bytes")
+    xueturn content
+}
+
+xuen main() {
+    print("=== Defer Demo ===")
+
+    // Defer runs in reverse order (LIFO)
+    xudefer print("3: last defer")
+    xudefer print("2: middle defer")
+    xudefer print("1: first defer")
+
+    print("Main body executing...")
+
+    // Go-style error handling with tuples
+    xuen safe_divide(a int, b int) {
+        xuif (b == 0) {
+            xueturn tuple(0, "division by zero")
+        }
+        xueturn tuple(a / b, "")
+    }
+
+    xuet result = safe_divide(10, 3)
+    print("10 / 3 = {first(result)}")
+
+    xuet err_result = safe_divide(10, 0)
+    xuif (second(err_result) != "") {
+        print("Error: {second(err_result)}")
+    }
+
+    print("Done!")
+}

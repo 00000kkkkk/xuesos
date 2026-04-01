@@ -161,8 +161,8 @@ func TestStringLiteral(t *testing.T) {
 			xuet name = "Xuesos"
 		}
 	`)
-	assertContains(t, code, "const char*")
-	assertContains(t, code, `"Xuesos"`)
+	assertContains(t, code, "XppString*")
+	assertContains(t, code, `xpp_string_new("Xuesos")`)
 }
 
 func TestFibonacci(t *testing.T) {
@@ -194,14 +194,13 @@ func TestHeaders(t *testing.T) {
 
 func TestStringVariable(t *testing.T) {
 	code := generate(t, `xuen main() { xuet name = "world" }`)
-	assertContains(t, code, "const char*")
-	assertContains(t, code, `"world"`)
+	assertContains(t, code, "XppString*")
+	assertContains(t, code, `xpp_string_new("world")`)
 }
 
 func TestPrintString(t *testing.T) {
 	code := generate(t, `xuen main() { print("hello") }`)
-	assertContains(t, code, "printf")
-	assertContains(t, code, "hello")
+	assertContains(t, code, `xpp_print_string(xpp_string_new("hello"))`)
 }
 
 func TestPrintStringVariable(t *testing.T) {
@@ -211,8 +210,8 @@ func TestPrintStringVariable(t *testing.T) {
 			print(name)
 		}
 	`)
-	assertContains(t, code, `const char* name`)
-	assertContains(t, code, `printf("%s\n", name)`)
+	assertContains(t, code, `XppString* name`)
+	assertContains(t, code, `xpp_print_string(name)`)
 }
 
 func TestPrintIntVariable(t *testing.T) {
@@ -222,7 +221,7 @@ func TestPrintIntVariable(t *testing.T) {
 			print(x)
 		}
 	`)
-	assertContains(t, code, `printf("%lld\n", (long long)x)`)
+	assertContains(t, code, `xpp_print_int(x)`)
 }
 
 func TestXuiatchStringArms(t *testing.T) {
@@ -235,9 +234,9 @@ func TestXuiatchStringArms(t *testing.T) {
 			}
 		}
 	`)
-	assertContains(t, code, `strcmp(x, "ok") == 0`)
+	assertContains(t, code, `xpp_string_eq(x, xpp_string_new("ok"))`)
 	assertContains(t, code, "} else {")
-	assertContains(t, code, `printf`)
+	assertContains(t, code, `xpp_print_string`)
 }
 
 func TestXuiatchIntArms(t *testing.T) {
@@ -283,8 +282,8 @@ func TestReturnZeroInsideMain(t *testing.T) {
 
 func TestStringComparisonHelper(t *testing.T) {
 	code := generate(t, `xuen main() {}`)
-	assertContains(t, code, "int xpp_streq(const char* a, const char* b)")
-	assertContains(t, code, "strcmp(a, b) == 0")
+	// The runtime provides xpp_string_eq for string comparison
+	assertContains(t, code, "xpp_string_eq")
 }
 
 func TestMutableStringVariable(t *testing.T) {
@@ -293,7 +292,7 @@ func TestMutableStringVariable(t *testing.T) {
 			xuiar msg = "hi"
 		}
 	`)
-	assertContains(t, code, `const char* msg = "hi"`)
+	assertContains(t, code, `XppString* msg = xpp_string_new("hi")`)
 }
 
 func TestNullLiteral(t *testing.T) {
@@ -311,7 +310,7 @@ func TestPrintBool(t *testing.T) {
 			print(xuitru)
 		}
 	`)
-	assertContains(t, code, `printf("%s\n", "true")`)
+	assertContains(t, code, `xpp_print_bool(true)`)
 }
 
 func TestAddressOfAndDeref(t *testing.T) {
@@ -326,6 +325,7 @@ func TestAddressOfAndDeref(t *testing.T) {
 
 func TestErrorHandlingGlobals(t *testing.T) {
 	code := generate(t, `xuen main() {}`)
-	assertContains(t, code, "static int _xpp_has_error")
-	assertContains(t, code, `static const char* _xpp_error_msg`)
+	// These globals are provided by the embedded runtime
+	assertContains(t, code, "_xpp_has_error")
+	assertContains(t, code, `_xpp_error_msg`)
 }
