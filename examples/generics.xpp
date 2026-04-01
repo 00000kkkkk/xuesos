@@ -1,0 +1,93 @@
+// Generics demo — higher-order functions as generic patterns
+// Since Xuesos++ is dynamically typed at runtime, generics work naturally
+
+xuen map_arr(arr, f) {
+    xuiar result = []
+    xuior (item xuin arr) {
+        push(result, f(item))
+    }
+    xueturn result
+}
+
+xuen filter_arr(arr, f) {
+    xuiar result = []
+    xuior (item xuin arr) {
+        xuif (f(item)) {
+            push(result, item)
+        }
+    }
+    xueturn result
+}
+
+xuen reduce_arr(arr, f, initial) {
+    xuiar acc = initial
+    xuior (item xuin arr) {
+        acc = f(acc, item)
+    }
+    xueturn acc
+}
+
+xuen find_arr(arr, f) {
+    xuior (item xuin arr) {
+        xuif (f(item)) {
+            xueturn item
+        }
+    }
+    xueturn xuinull
+}
+
+xuen any_arr(arr, f) {
+    xuior (item xuin arr) {
+        xuif (f(item)) {
+            xueturn xuitru
+        }
+    }
+    xueturn xuinia
+}
+
+xuen all_arr(arr, f) {
+    xuior (item xuin arr) {
+        xuif (!f(item)) {
+            xueturn xuinia
+        }
+    }
+    xueturn xuitru
+}
+
+xuen main() {
+    xuet nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    // Map: double every element
+    xuet doubled = map_arr(nums, (x) => x * 2)
+    print("Doubled: {doubled}")
+
+    // Filter: only even numbers
+    xuet evens = filter_arr(nums, (x) => x % 2 == 0)
+    print("Evens: {evens}")
+
+    // Reduce: sum all
+    xuet total = reduce_arr(nums, (acc, x) => acc + x, 0)
+    print("Sum: {total}")
+
+    // Find first > 5
+    xuet found = find_arr(nums, (x) => x > 5)
+    print("First > 5: {found}")
+
+    // Any negative?
+    print("Any negative? {any_arr(nums, (x) => x < 0)}")
+
+    // All positive?
+    print("All positive? {all_arr(nums, (x) => x > 0)}")
+
+    // Chain: squares of evens
+    xuet result = map_arr(filter_arr(nums, (x) => x % 2 == 0), (x) => x * x)
+    print("Squares of evens: {result}")
+
+    // Works with strings too
+    xuet words = ["hello", "world", "xuesos", "plus"]
+    xuet uppered = map_arr(words, (w) => upper(w))
+    print("Uppercase: {uppered}")
+
+    xuet long_words = filter_arr(words, (w) => len(w) > 4)
+    print("Long words: {long_words}")
+}

@@ -1091,3 +1091,91 @@ func TestThrowInFunction(t *testing.T) {
 	`)
 	expectOutput(t, interp, "error: division by zero!")
 }
+
+// --- Concurrency ---
+
+func TestSleep(t *testing.T) {
+	interp := run(t, `
+		sleep(1)
+		print("done")
+	`)
+	expectOutput(t, interp, "done")
+}
+
+func TestWait(t *testing.T) {
+	interp := run(t, `
+		wait(1)
+		print("done")
+	`)
+	expectOutput(t, interp, "done")
+}
+
+func TestChannelBasic(t *testing.T) {
+	interp := run(t, `
+		xuet ch = channel(1)
+		send(ch, 42)
+		xuet val = recv(ch)
+		print(val)
+	`)
+	expectOutput(t, interp, "42")
+}
+
+func TestChannelStringValue(t *testing.T) {
+	interp := run(t, `
+		xuet ch = channel(1)
+		send(ch, "hello")
+		xuet val = recv(ch)
+		print(val)
+	`)
+	expectOutput(t, interp, "hello")
+}
+
+func TestSpawnWithChannel(t *testing.T) {
+	interp := run(t, `
+		xuet ch = channel(0)
+		spawn((  ) => {
+			send(ch, 99)
+		})
+		xuet val = recv(ch)
+		print(val)
+	`)
+	expectOutput(t, interp, "99")
+}
+
+// --- Pointers and memory management ---
+
+func TestPointerBasic(t *testing.T) {
+	interp := run(t, `
+		xuiar x = 42
+		xuet ptr = &x
+		print(*ptr)
+	`)
+	expectOutput(t, interp, "42")
+}
+
+func TestPointerModify(t *testing.T) {
+	interp := run(t, `
+		xuiar x = 10
+		xuet ptr = &x
+		x = 99
+		print(*ptr)
+	`)
+	expectOutput(t, interp, "99")
+}
+
+func TestAlloc(t *testing.T) {
+	interp := run(t, `
+		xuet buf = alloc(5)
+		print(len(buf))
+		print(buf[0])
+	`)
+	expectOutput(t, interp, "5", "0")
+}
+
+func TestSizeof(t *testing.T) {
+	interp := run(t, `
+		print(sizeof(42))
+		print(sizeof("hello"))
+	`)
+	expectOutput(t, interp, "8", "5")
+}

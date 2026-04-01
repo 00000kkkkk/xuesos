@@ -22,6 +22,8 @@ const (
 	VAL_BUILTIN
 	VAL_ENUM_VARIANT
 	VAL_RANGE
+	VAL_CHANNEL  // channel for concurrency
+	VAL_POINTER  // pointer (address-of)
 	VAL_RETURN   // wrapper for return values
 	VAL_BREAK    // signal for break
 	VAL_CONTINUE // signal for continue
@@ -41,6 +43,8 @@ var valueTypeNames = map[ValueType]string{
 	VAL_BUILTIN:      "builtin",
 	VAL_ENUM_VARIANT: "enum",
 	VAL_RANGE:        "range",
+	VAL_CHANNEL:      "channel",
+	VAL_POINTER:      "pointer",
 }
 
 func (v ValueType) String() string {
@@ -66,6 +70,8 @@ type Value struct {
 	BuiltinVal  BuiltinFunc
 	EnumVal     *EnumVariantValue
 	RangeVal    *RangeValue
+	ChannelVal  chan *Value
+	PointerVal  *PointerValue
 	ReturnVal   *Value // wrapped value for VAL_RETURN
 }
 
@@ -103,6 +109,12 @@ type MapValue struct {
 type RangeValue struct {
 	Start int64
 	End   int64
+}
+
+// PointerValue stores a pointer to a variable in an environment.
+type PointerValue struct {
+	Env  *Environment // the environment containing the variable
+	Name string       // variable name being pointed to
 }
 
 // StructDef stores a struct definition (not an instance).
@@ -207,6 +219,10 @@ func (v *Value) String() string {
 		return v.EnumVal.EnumName + "." + v.EnumVal.VariantName
 	case VAL_RANGE:
 		return fmt.Sprintf("%d..%d", v.RangeVal.Start, v.RangeVal.End)
+	case VAL_CHANNEL:
+		return "<channel>"
+	case VAL_POINTER:
+		return fmt.Sprintf("<pointer to %s>", v.PointerVal.Name)
 	default:
 		return "<unknown>"
 	}

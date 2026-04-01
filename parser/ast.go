@@ -459,3 +459,23 @@ type ThrowExpression struct {
 func (e *ThrowExpression) exprNode()                {}
 func (e *ThrowExpression) TokenPos() lexer.Position { return e.Pos }
 func (e *ThrowExpression) nodeType() string         { return "ThrowExpression" }
+
+// AddressOfExpression: &variable
+type AddressOfExpression struct {
+	Pos   lexer.Position
+	Value Expression
+}
+
+func (e *AddressOfExpression) exprNode()                {}
+func (e *AddressOfExpression) TokenPos() lexer.Position { return e.Pos }
+func (e *AddressOfExpression) nodeType() string         { return "AddressOfExpression" }
+
+// DerefExpression: *pointer
+type DerefExpression struct {
+	Pos   lexer.Position
+	Value Expression
+}
+
+func (e *DerefExpression) exprNode()                {}
+func (e *DerefExpression) TokenPos() lexer.Position { return e.Pos }
+func (e *DerefExpression) nodeType() string         { return "DerefExpression" }

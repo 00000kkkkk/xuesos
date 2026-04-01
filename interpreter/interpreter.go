@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/00000kkkkk/xusesosplusplus/parser"
 )
@@ -599,6 +600,104 @@ func (i *Interpreter) registerBuiltins() {
 		os.Exit(1)
 		return NullValue(), nil
 	}}, false)
+
+	// --- Concurrency built-ins ---
+
+	// spawn(func) — run function in a goroutine
+	i.globals.Define("spawn", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_FUNCTION {
+			return nil, fmt.Errorf("spawn() takes 1 function argument")
+		}
+		fn := args[0]
+		go func() {
+			body := fn.FuncVal.Body.(*parser.BlockStatement)
+			env := NewEnclosedEnvironment(fn.FuncVal.Closure)
+			i.execBlock(body, env)
+		}()
+		return NullValue(), nil
+	}}, false)
+
+	// sleep(ms) — sleep for milliseconds
+	i.globals.Define("sleep", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_INT {
+			return nil, fmt.Errorf("sleep() takes 1 int argument (milliseconds)")
+		}
+		time.Sleep(time.Duration(args[0].IntVal) * time.Millisecond)
+		return NullValue(), nil
+	}}, false)
+
+	// wait(ms) — alias for sleep
+	i.globals.Define("wait", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_INT {
+			return nil, fmt.Errorf("wait() takes 1 int argument (milliseconds)")
+		}
+		time.Sleep(time.Duration(args[0].IntVal) * time.Millisecond)
+		return NullValue(), nil
+	}}, false)
+
+	// channel() — create a new channel
+	i.globals.Define("channel", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		size := 0
+		if len(args) > 0 && args[0].Type == VAL_INT {
+			size = int(args[0].IntVal)
+		}
+		ch := make(chan *Value, size)
+		return &Value{Type: VAL_CHANNEL, ChannelVal: ch}, nil
+	}}, false)
+
+	// send(channel, value) — send value to channel
+	i.globals.Define("send", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_CHANNEL {
+			return nil, fmt.Errorf("send() takes a channel and a value")
+		}
+		args[0].ChannelVal <- args[1]
+		return NullValue(), nil
+	}}, false)
+
+	// recv(channel) — receive value from channel
+	i.globals.Define("recv", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_CHANNEL {
+			return nil, fmt.Errorf("recv() takes 1 channel argument")
+		}
+		val := <-args[0].ChannelVal
+		return val, nil
+	}}, false)
+
+	// --- Memory management built-ins ---
+
+	// alloc(size) — allocate array of given size filled with 0
+	i.globals.Define("alloc", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_INT {
+			return nil, fmt.Errorf("alloc() takes 1 int argument")
+		}
+		size := int(args[0].IntVal)
+		elems := make([]*Value, size)
+		for idx := range elems {
+			elems[idx] = IntVal(0)
+		}
+		return ArrayValue(elems), nil
+	}}, false)
+
+	// sizeof(value) — return size info
+	i.globals.Define("sizeof", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("sizeof() takes 1 argument")
+		}
+		switch args[0].Type {
+		case VAL_INT:
+			return IntVal(8), nil
+		case VAL_FLOAT:
+			return IntVal(8), nil
+		case VAL_BOOL:
+			return IntVal(1), nil
+		case VAL_STRING:
+			return IntVal(int64(len(args[0].StringVal))), nil
+		case VAL_ARRAY:
+			return IntVal(int64(len(args[0].ArrayVal))), nil
+		default:
+			return IntVal(0), nil
+		}
+	}}, false)
 }
 
 func toFloat(v *Value) (float64, bool) {
@@ -993,6 +1092,10 @@ func (i *Interpreter) evalExpression(expr parser.Expression, env *Environment) (
 			return nil, err
 		}
 		return nil, fmt.Errorf("%s", val.String())
+	case *parser.AddressOfExpression:
+		return i.evalAddressOf(e, env)
+	case *parser.DerefExpression:
+		return i.evalDeref(e, env)
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -1004,6 +1107,34 @@ func (i *Interpreter) evalIdentifier(e *parser.Identifier, env *Environment) (*V
 		return nil, fmt.Errorf("%s: undefined variable %q", e.TokenPos(), e.Value)
 	}
 	return val, nil
+}
+
+func (i *Interpreter) evalAddressOf(e *parser.AddressOfExpression, env *Environment) (*Value, error) {
+	// e.Value must be an Identifier
+	ident, ok := e.Value.(*parser.Identifier)
+	if !ok {
+		return nil, fmt.Errorf("can only take address of a variable")
+	}
+	// Check variable exists
+	if _, ok := env.Get(ident.Value); !ok {
+		return nil, fmt.Errorf("undefined variable %q", ident.Value)
+	}
+	return &Value{Type: VAL_POINTER, PointerVal: &PointerValue{Env: env, Name: ident.Value}}, nil
+}
+
+func (i *Interpreter) evalDeref(e *parser.DerefExpression, env *Environment) (*Value, error) {
+	val, err := i.evalExpression(e.Value, env)
+	if err != nil {
+		return nil, err
+	}
+	if val.Type != VAL_POINTER {
+		return nil, fmt.Errorf("cannot dereference %s", val.Type)
+	}
+	result, ok := val.PointerVal.Env.Get(val.PointerVal.Name)
+	if !ok {
+		return nil, fmt.Errorf("dangling pointer")
+	}
+	return result, nil
 }
 
 func (i *Interpreter) evalPrefix(e *parser.PrefixExpression, env *Environment) (*Value, error) {

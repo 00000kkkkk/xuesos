@@ -57,6 +57,7 @@ const (
 	TOKEN_XUTRY    // xutry (try)
 	TOKEN_XUCATCH  // xucatch (catch)
 	TOKEN_XUTHROW  // xuthrow (throw)
+	TOKEN_XUSPAWN  // xuspawn (spawn goroutine)
 
 	// Type keywords
 	TOKEN_INT_TYPE
@@ -88,6 +89,7 @@ const (
 	TOKEN_AND       // &&
 	TOKEN_OR        // ||
 	TOKEN_NOT       // !
+	TOKEN_AMPERSAND // & (address-of)
 	TOKEN_FAT_ARROW // =>
 	TOKEN_DOTDOT    // ..
 
@@ -142,6 +144,7 @@ var tokenNames = map[TokenType]string{
 	TOKEN_XUTRY:    "xutry",
 	TOKEN_XUCATCH:  "xucatch",
 	TOKEN_XUTHROW:  "xuthrow",
+	TOKEN_XUSPAWN:  "xuspawn",
 
 	TOKEN_INT_TYPE:     "int",
 	TOKEN_INT8_TYPE:    "int8",
@@ -171,6 +174,7 @@ var tokenNames = map[TokenType]string{
 	TOKEN_AND:       "&&",
 	TOKEN_OR:        "||",
 	TOKEN_NOT:       "!",
+	TOKEN_AMPERSAND: "&",
 	TOKEN_FAT_ARROW: "=>",
 	TOKEN_DOTDOT:    "..",
 
@@ -231,6 +235,7 @@ var keywords = map[string]TokenType{
 	"xutry":    TOKEN_XUTRY,
 	"xucatch":  TOKEN_XUCATCH,
 	"xuthrow":  TOKEN_XUTHROW,
+	"xuspawn":  TOKEN_XUSPAWN,
 	"int":      TOKEN_INT_TYPE,
 	"int8":     TOKEN_INT8_TYPE,
 	"int16":    TOKEN_INT16_TYPE,

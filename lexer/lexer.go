@@ -244,8 +244,7 @@ func (l *Lexer) nextRawToken() Token {
 		if l.match('&') {
 			return l.makeToken(TOKEN_AND, "&&", startPos)
 		}
-		l.errorf(startPos, "unexpected character '&', did you mean '&&'?")
-		return l.makeToken(TOKEN_ILLEGAL, "&", startPos)
+		return l.makeToken(TOKEN_AMPERSAND, "&", startPos)
 
 	case '|':
 		if l.match('|') {

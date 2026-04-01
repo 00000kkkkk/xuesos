@@ -137,6 +137,14 @@ func (c *Checker) registerBuiltins() {
 	c.scope.define("keys", &FuncType{ReturnType: &ArrayType{ElementType: TypeStr}}, false)
 	c.scope.define("values", &FuncType{ReturnType: &ArrayType{ElementType: TypeVoid}}, false)
 	c.scope.define("delete", &FuncType{ReturnType: TypeVoid}, false)
+
+	// Concurrency built-ins
+	c.scope.define("spawn", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("sleep", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("wait", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("channel", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("send", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("recv", &FuncType{ReturnType: TypeVoid}, false)
 }
 
 // Check type-checks a program and returns any errors.
@@ -385,7 +393,7 @@ func (c *Checker) checkXueturn(s *parser.XueturnStatement) {
 
 func (c *Checker) checkXuif(s *parser.XuifStatement) {
 	condType := c.checkExpression(s.Condition)
-	if condType != nil && !condType.Equals(TypeBool) && !IsNumeric(condType) {
+	if condType != nil && !condType.Equals(TypeBool) && !IsNumeric(condType) && !condType.Equals(TypeVoid) {
 		c.errorf(s.Pos, "condition must be bool, got %s", condType.TypeName())
 	}
 
@@ -434,7 +442,7 @@ func (c *Checker) checkXuior(s *parser.XuiorStatement) {
 
 func (c *Checker) checkXuile(s *parser.XuileStatement) {
 	condType := c.checkExpression(s.Condition)
-	if condType != nil && !condType.Equals(TypeBool) && !IsNumeric(condType) {
+	if condType != nil && !condType.Equals(TypeBool) && !IsNumeric(condType) && !condType.Equals(TypeVoid) {
 		c.errorf(s.Pos, "condition must be bool, got %s", condType.TypeName())
 	}
 	c.checkBlock(s.Body)

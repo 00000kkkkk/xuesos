@@ -705,10 +705,10 @@ func TestTokenString(t *testing.T) {
 	}
 }
 
-func TestSingleAmpersandError(t *testing.T) {
-	_, errs := lexTokensWithErrors(t, "&")
-	if len(errs) == 0 {
-		t.Fatal("expected error for single '&'")
+func TestSingleAmpersand(t *testing.T) {
+	tokens := lexTokens(t, "&x")
+	if tokens[0].Type != TOKEN_AMPERSAND {
+		t.Errorf("expected AMPERSAND, got %s", tokens[0].Type)
 	}
 }
 

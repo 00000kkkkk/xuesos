@@ -1,0 +1,31 @@
+// Concurrency in Xuesos++ — goroutines and channels
+
+xuen producer(ch, id int) {
+    xuior (i xuin 0..3) {
+        xuet msg = "worker {id}: item {i}"
+        send(ch, msg)
+        sleep(10)
+    }
+}
+
+xuen main() {
+    // Basic channel
+    xuet ch = channel(10)
+
+    // Spawn workers
+    spawn(() => {
+        producer(ch, 1)
+    })
+    spawn(() => {
+        producer(ch, 2)
+    })
+
+    // Receive results
+    sleep(100)
+    xuior (i xuin 0..6) {
+        xuet msg = recv(ch)
+        print(msg)
+    }
+
+    print("All done!")
+}

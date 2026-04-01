@@ -123,6 +123,25 @@ xutry {
 // Multi-file imports
 xuimport "mylib"
 
+// Pointers
+xuiar x = 42
+xuet ptr = &x
+print(*ptr)        // 42
+
+// Memory allocation
+xuet buf = alloc(1024)
+
+// Concurrency (goroutines + channels)
+xuet ch = channel(10)
+spawn(() => {
+    send(ch, "hello from goroutine")
+})
+xuet msg = recv(ch)
+
+// Higher-order functions (generics pattern)
+xuet doubled = map_arr(nums, (x) => x * 2)
+xuet evens = filter_arr(nums, (x) => x % 2 == 0)
+
 // Enums
 xuenum Direction {
     Up

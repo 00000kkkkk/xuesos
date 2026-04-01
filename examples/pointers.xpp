@@ -1,0 +1,29 @@
+// Pointers and memory management in Xuesos++
+
+xuen swap(a, b) {
+    xuet temp = *a
+    *a = *b
+    *b = temp
+}
+
+xuen main() {
+    // Basic pointer
+    xuiar x = 42
+    xuet ptr = &x
+    print("x = {x}")
+    print("*ptr = {*ptr}")
+
+    // Pointer tracks variable
+    x = 99
+    print("After x = 99: *ptr = {*ptr}")
+
+    // Memory allocation
+    xuet buffer = alloc(10)
+    print("Buffer length: {len(buffer)}")
+    print("Buffer[0]: {buffer[0]}")
+
+    // sizeof
+    print("sizeof(int): {sizeof(42)}")
+    print("sizeof(str): {sizeof("hello")}")
+    print("sizeof(bool): {sizeof(xuitru)}")
+}

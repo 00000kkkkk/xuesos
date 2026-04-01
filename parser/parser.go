@@ -653,6 +653,17 @@ func (p *Parser) parsePrefixExpression() Expression {
 		right := p.parseExpression(PREFIX)
 		return &PrefixExpression{Pos: tok.Pos, Operator: tok.Literal, Right: right}
 
+	case lexer.TOKEN_AMPERSAND:
+		p.advance()
+		right := p.parseExpression(PREFIX)
+		return &AddressOfExpression{Pos: tok.Pos, Value: right}
+
+	case lexer.TOKEN_STAR:
+		// * in prefix position is dereference
+		p.advance()
+		right := p.parseExpression(PREFIX)
+		return &DerefExpression{Pos: tok.Pos, Value: right}
+
 	case lexer.TOKEN_LPAREN:
 		if p.isLambda() {
 			return p.parseLambda()
