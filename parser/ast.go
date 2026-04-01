@@ -400,3 +400,28 @@ type StructFieldValue struct {
 func (e *StructLiteral) exprNode()                {}
 func (e *StructLiteral) TokenPos() lexer.Position { return e.Pos }
 func (e *StructLiteral) nodeType() string         { return "StructLiteral" }
+
+// MapLiteral: {"key": value, ...}
+type MapLiteral struct {
+	Pos   lexer.Position
+	Pairs []MapPair
+}
+
+type MapPair struct {
+	Key   Expression
+	Value Expression
+}
+
+func (e *MapLiteral) exprNode()                {}
+func (e *MapLiteral) TokenPos() lexer.Position { return e.Pos }
+func (e *MapLiteral) nodeType() string         { return "MapLiteral" }
+
+// InterpolatedString: "hello {expr} world"
+type InterpolatedString struct {
+	Pos   lexer.Position
+	Parts []Expression // alternating StringLiteral and expressions
+}
+
+func (e *InterpolatedString) exprNode()                {}
+func (e *InterpolatedString) TokenPos() lexer.Position { return e.Pos }
+func (e *InterpolatedString) nodeType() string         { return "InterpolatedString" }

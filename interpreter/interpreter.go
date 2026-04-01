@@ -117,6 +117,8 @@ func (i *Interpreter) registerBuiltins() {
 				return IntVal(int64(len([]rune(args[0].StringVal)))), nil
 			case VAL_ARRAY:
 				return IntVal(int64(len(args[0].ArrayVal))), nil
+			case VAL_MAP:
+				return IntVal(int64(len(args[0].MapVal.Pairs))), nil
 			default:
 				return nil, fmt.Errorf("len() not supported for type %s", args[0].Type)
 			}
@@ -406,6 +408,118 @@ func (i *Interpreter) registerBuiltins() {
 			}
 		},
 	}, false)
+
+	// Map built-ins
+	i.globals.Define("has_key", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_MAP {
+			return nil, fmt.Errorf("has_key() takes a map and a key")
+		}
+		_, ok := args[0].MapVal.Pairs[args[1].String()]
+		return BoolValue(ok), nil
+	}}, false)
+
+	i.globals.Define("keys", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_MAP {
+			return nil, fmt.Errorf("keys() takes 1 map argument")
+		}
+		elems := make([]*Value, len(args[0].MapVal.Keys))
+		for idx, k := range args[0].MapVal.Keys {
+			elems[idx] = StringVal(k)
+		}
+		return ArrayValue(elems), nil
+	}}, false)
+
+	i.globals.Define("values", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_MAP {
+			return nil, fmt.Errorf("values() takes 1 map argument")
+		}
+		elems := make([]*Value, len(args[0].MapVal.Keys))
+		for idx, k := range args[0].MapVal.Keys {
+			elems[idx] = args[0].MapVal.Pairs[k]
+		}
+		return ArrayValue(elems), nil
+	}}, false)
+
+	i.globals.Define("delete", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_MAP {
+			return nil, fmt.Errorf("delete() takes a map and a key")
+		}
+		keyStr := args[1].String()
+		delete(args[0].MapVal.Pairs, keyStr)
+		newKeys := make([]string, 0, len(args[0].MapVal.Keys))
+		for _, k := range args[0].MapVal.Keys {
+			if k != keyStr { newKeys = append(newKeys, k) }
+		}
+		args[0].MapVal.Keys = newKeys
+		return NullValue(), nil
+	}}, false)
+
+	// Stdlib: math
+	i.globals.Define("math_pi", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		return FloatVal(math.Pi), nil
+	}}, false)
+	i.globals.Define("math_e", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		return FloatVal(math.E), nil
+	}}, false)
+	i.globals.Define("math_floor", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_floor() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return IntVal(int64(math.Floor(f))), nil
+	}}, false)
+	i.globals.Define("math_ceil", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_ceil() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return IntVal(int64(math.Ceil(f))), nil
+	}}, false)
+	i.globals.Define("math_pow", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 { return nil, fmt.Errorf("math_pow() takes 2 arguments") }
+		base, _ := toFloat(args[0])
+		exp, _ := toFloat(args[1])
+		return FloatVal(math.Pow(base, exp)), nil
+	}}, false)
+	i.globals.Define("math_round", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_round() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return IntVal(int64(math.Round(f))), nil
+	}}, false)
+	i.globals.Define("math_sin", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_sin() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return FloatVal(math.Sin(f)), nil
+	}}, false)
+	i.globals.Define("math_cos", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_cos() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return FloatVal(math.Cos(f)), nil
+	}}, false)
+	i.globals.Define("math_log", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 { return nil, fmt.Errorf("math_log() takes 1 argument") }
+		f, _ := toFloat(args[0])
+		return FloatVal(math.Log(f)), nil
+	}}, false)
+
+	// Stdlib: os
+	i.globals.Define("os_args", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		elems := make([]*Value, len(os.Args))
+		for idx, a := range os.Args {
+			elems[idx] = StringVal(a)
+		}
+		return ArrayValue(elems), nil
+	}}, false)
+	i.globals.Define("os_getenv", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("os_getenv() takes 1 string argument")
+		}
+		return StringVal(os.Getenv(args[0].StringVal)), nil
+	}}, false)
+}
+
+func toFloat(v *Value) (float64, bool) {
+	switch v.Type {
+	case VAL_FLOAT: return v.FloatVal, true
+	case VAL_INT: return float64(v.IntVal), true
+	default: return 0, false
+	}
 }
 
 // --- Statement execution ---
@@ -506,7 +620,7 @@ func (i *Interpreter) execAssign(s *parser.AssignStatement, env *Environment) (*
 		}
 		obj.StructVal.Fields[target.Member] = val
 	case *parser.IndexExpression:
-		arr, err := i.evalExpression(target.Left, env)
+		container, err := i.evalExpression(target.Left, env)
 		if err != nil {
 			return nil, err
 		}
@@ -514,17 +628,24 @@ func (i *Interpreter) execAssign(s *parser.AssignStatement, env *Environment) (*
 		if err != nil {
 			return nil, err
 		}
-		if arr.Type != VAL_ARRAY {
-			return nil, fmt.Errorf("%s: cannot index %s", target.TokenPos(), arr.Type)
+		if container.Type == VAL_MAP {
+			keyStr := idx.String()
+			if _, exists := container.MapVal.Pairs[keyStr]; !exists {
+				container.MapVal.Keys = append(container.MapVal.Keys, keyStr)
+			}
+			container.MapVal.Pairs[keyStr] = val
+		} else if container.Type == VAL_ARRAY {
+			if idx.Type != VAL_INT {
+				return nil, fmt.Errorf("%s: array index must be int, got %s", target.TokenPos(), idx.Type)
+			}
+			index := int(idx.IntVal)
+			if index < 0 || index >= len(container.ArrayVal) {
+				return nil, fmt.Errorf("%s: index %d out of bounds (len=%d)", target.TokenPos(), index, len(container.ArrayVal))
+			}
+			container.ArrayVal[index] = val
+		} else {
+			return nil, fmt.Errorf("%s: cannot index %s", target.TokenPos(), container.Type)
 		}
-		if idx.Type != VAL_INT {
-			return nil, fmt.Errorf("%s: array index must be int, got %s", target.TokenPos(), idx.Type)
-		}
-		index := int(idx.IntVal)
-		if index < 0 || index >= len(arr.ArrayVal) {
-			return nil, fmt.Errorf("%s: index %d out of bounds (len=%d)", target.TokenPos(), index, len(arr.ArrayVal))
-		}
-		arr.ArrayVal[index] = val
 	default:
 		return nil, fmt.Errorf("%s: invalid assignment target", s.TokenPos())
 	}
@@ -767,6 +888,10 @@ func (i *Interpreter) evalExpression(expr parser.Expression, env *Environment) (
 		return i.evalRange(e, env)
 	case *parser.StructLiteral:
 		return i.evalStructLiteral(e, env)
+	case *parser.MapLiteral:
+		return i.evalMapLiteral(e, env)
+	case *parser.InterpolatedString:
+		return i.evalInterpolatedString(e, env)
 	default:
 		return nil, fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -1078,6 +1203,12 @@ func (i *Interpreter) evalIndex(e *parser.IndexExpression, env *Environment) (*V
 			return nil, fmt.Errorf("%s: index %d out of bounds (len=%d)", e.TokenPos(), idx, len(left.ArrayVal))
 		}
 		return left.ArrayVal[idx], nil
+	case VAL_MAP:
+		keyStr := index.String()
+		if val, ok := left.MapVal.Pairs[keyStr]; ok {
+			return val, nil
+		}
+		return NullValue(), nil
 	case VAL_STRING:
 		if index.Type != VAL_INT {
 			return nil, fmt.Errorf("%s: string index must be int, got %s", e.TokenPos(), index.Type)
@@ -1157,6 +1288,37 @@ func (i *Interpreter) evalExpressions(exprs []parser.Expression, env *Environmen
 		result[idx] = val
 	}
 	return result, nil
+}
+
+func (i *Interpreter) evalMapLiteral(e *parser.MapLiteral, env *Environment) (*Value, error) {
+	pairs := make(map[string]*Value)
+	var keys []string
+	for _, pair := range e.Pairs {
+		key, err := i.evalExpression(pair.Key, env)
+		if err != nil {
+			return nil, err
+		}
+		val, err := i.evalExpression(pair.Value, env)
+		if err != nil {
+			return nil, err
+		}
+		keyStr := key.String()
+		pairs[keyStr] = val
+		keys = append(keys, keyStr)
+	}
+	return MapVal(pairs, keys), nil
+}
+
+func (i *Interpreter) evalInterpolatedString(e *parser.InterpolatedString, env *Environment) (*Value, error) {
+	var buf strings.Builder
+	for _, part := range e.Parts {
+		val, err := i.evalExpression(part, env)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(val.String())
+	}
+	return StringVal(buf.String()), nil
 }
 
 // --- Helpers ---

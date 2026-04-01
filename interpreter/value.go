@@ -16,6 +16,7 @@ const (
 	VAL_BOOL
 	VAL_NULL
 	VAL_ARRAY
+	VAL_MAP
 	VAL_STRUCT
 	VAL_FUNCTION
 	VAL_BUILTIN
@@ -34,6 +35,7 @@ var valueTypeNames = map[ValueType]string{
 	VAL_BOOL:         "bool",
 	VAL_NULL:         "null",
 	VAL_ARRAY:        "array",
+	VAL_MAP:          "map",
 	VAL_STRUCT:       "struct",
 	VAL_FUNCTION:     "function",
 	VAL_BUILTIN:      "builtin",
@@ -58,6 +60,7 @@ type Value struct {
 	CharVal     rune
 	BoolVal     bool
 	ArrayVal    []*Value
+	MapVal      *MapValue
 	StructVal   *StructValue
 	FuncVal     *FuncValue
 	BuiltinVal  BuiltinFunc
@@ -88,6 +91,12 @@ type StructValue struct {
 type EnumVariantValue struct {
 	EnumName    string
 	VariantName string
+}
+
+// MapValue stores a map/dictionary.
+type MapValue struct {
+	Pairs map[string]*Value
+	Keys  []string // maintains insertion order
 }
 
 // RangeValue stores a range (start..end).
@@ -123,6 +132,10 @@ func ArrayValue(elements []*Value) *Value {
 	return &Value{Type: VAL_ARRAY, ArrayVal: elements}
 }
 
+func MapVal(pairs map[string]*Value, keys []string) *Value {
+	return &Value{Type: VAL_MAP, MapVal: &MapValue{Pairs: pairs, Keys: keys}}
+}
+
 func RangeVal(start, end int64) *Value {
 	return &Value{Type: VAL_RANGE, RangeVal: &RangeValue{Start: start, End: end}}
 }
@@ -142,6 +155,8 @@ func (v *Value) IsTruthy() bool {
 		return v.StringVal != ""
 	case VAL_ARRAY:
 		return len(v.ArrayVal) > 0
+	case VAL_MAP:
+		return len(v.MapVal.Pairs) > 0
 	default:
 		return true
 	}
@@ -165,6 +180,13 @@ func (v *Value) String() string {
 		return "xuinia"
 	case VAL_NULL:
 		return "xuinull"
+	case VAL_MAP:
+		var parts []string
+		for _, k := range v.MapVal.Keys {
+			val := v.MapVal.Pairs[k]
+			parts = append(parts, fmt.Sprintf("%q: %s", k, val.Inspect()))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
 	case VAL_ARRAY:
 		var parts []string
 		for _, elem := range v.ArrayVal {

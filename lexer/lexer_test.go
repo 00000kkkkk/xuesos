@@ -785,3 +785,88 @@ func searchString(s, substr string) bool {
 	}
 	return false
 }
+
+// --- Map syntax tests ---
+
+func TestColonToken(t *testing.T) {
+	tokens := lexTokens(t, "a : b")
+	found := false
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_COLON {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected COLON token")
+	}
+}
+
+func TestMapLiteral(t *testing.T) {
+	// [str:int] type syntax needs colon
+	tokens := lexTokens(t, `xuet m = {"a": 1, "b": 2}`)
+	hasColon := false
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_COLON {
+			hasColon = true
+		}
+	}
+	if !hasColon {
+		t.Error("expected COLON in map literal")
+	}
+}
+
+// --- String interpolation tests ---
+
+func TestStringInterpolation(t *testing.T) {
+	// "hello {name}" should produce INTERP_STRING tokens
+	tokens := lexTokens(t, `"hello {name}"`)
+	// Should have: STRING_PART("hello ") IDENT(name) STRING_PART("")
+	hasInterpStart := false
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_INTERP_START {
+			hasInterpStart = true
+		}
+	}
+	if !hasInterpStart {
+		t.Error("expected INTERP_START token in interpolated string")
+	}
+}
+
+func TestStringInterpolationMultiple(t *testing.T) {
+	tokens := lexTokens(t, `"{a} + {b} = {c}"`)
+	// Should have INTERP_START, then STRING/IDENT pairs, then INTERP_END
+	hasStart := false
+	hasEnd := false
+	identCount := 0
+	for _, tok := range tokens {
+		if tok.Type == TOKEN_INTERP_START {
+			hasStart = true
+		}
+		if tok.Type == TOKEN_INTERP_END {
+			hasEnd = true
+		}
+		if tok.Type == TOKEN_IDENT {
+			identCount++
+		}
+	}
+	if !hasStart {
+		t.Error("expected INTERP_START")
+	}
+	if !hasEnd {
+		t.Error("expected INTERP_END")
+	}
+	if identCount != 3 {
+		t.Errorf("expected 3 identifiers (a, b, c), got %d", identCount)
+	}
+}
+
+func TestStringNoInterpolation(t *testing.T) {
+	// Regular strings without { should still work
+	tokens := lexTokens(t, `"hello world"`)
+	if tokens[0].Type != TOKEN_STRING {
+		t.Errorf("expected STRING, got %s", tokens[0].Type)
+	}
+	if tokens[0].Literal != "hello world" {
+		t.Errorf("expected 'hello world', got %q", tokens[0].Literal)
+	}
+}

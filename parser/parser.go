@@ -618,6 +618,9 @@ func (p *Parser) parsePrefixExpression() Expression {
 		val, _ := strconv.ParseFloat(tok.Literal, 64)
 		return &FloatLiteral{Pos: tok.Pos, Raw: tok.Literal, Value: val}
 
+	case lexer.TOKEN_INTERP_START:
+		return p.parseInterpolatedString()
+
 	case lexer.TOKEN_STRING:
 		p.advance()
 		return &StringLiteral{Pos: tok.Pos, Value: tok.Literal}
@@ -656,6 +659,9 @@ func (p *Parser) parsePrefixExpression() Expression {
 
 	case lexer.TOKEN_LBRACKET:
 		return p.parseArrayLiteral()
+
+	case lexer.TOKEN_LBRACE:
+		return p.parseMapLiteral()
 
 	default:
 		p.errorf(tok.Pos, "unexpected token %s (%q)", tok.Type, tok.Literal)
@@ -779,6 +785,57 @@ func (p *Parser) parseStructLiteral(nameTok lexer.Token) Expression {
 		Name:   nameTok.Literal,
 		Fields: fields,
 	}
+}
+
+func (p *Parser) parseMapLiteral() Expression {
+	pos := p.advance().Pos // consume {
+	p.skipSemicolons()
+
+	var pairs []MapPair
+	if p.current().Type != lexer.TOKEN_RBRACE {
+		for {
+			key := p.parseExpression(LOWEST)
+			p.expect(lexer.TOKEN_COLON)
+			value := p.parseExpression(LOWEST)
+			pairs = append(pairs, MapPair{Key: key, Value: value})
+			p.skipSemicolons()
+			if !p.match(lexer.TOKEN_COMMA) {
+				p.skipSemicolons()
+				break
+			}
+			p.skipSemicolons()
+		}
+	}
+
+	p.expect(lexer.TOKEN_RBRACE)
+
+	return &MapLiteral{Pos: pos, Pairs: pairs}
+}
+
+func (p *Parser) parseInterpolatedString() Expression {
+	pos := p.advance().Pos // consume INTERP_START
+
+	var parts []Expression
+	for p.current().Type != lexer.TOKEN_INTERP_END && !p.isAtEnd() {
+		if p.current().Type == lexer.TOKEN_STRING {
+			tok := p.advance()
+			if tok.Literal != "" {
+				parts = append(parts, &StringLiteral{Pos: tok.Pos, Value: tok.Literal})
+			}
+		} else {
+			expr := p.parseExpression(LOWEST)
+			if expr != nil {
+				parts = append(parts, expr)
+			}
+		}
+	}
+
+	p.match(lexer.TOKEN_INTERP_END) // consume INTERP_END
+
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return &InterpolatedString{Pos: pos, Parts: parts}
 }
 
 // parseInt parses integer literals including hex, binary, octal.

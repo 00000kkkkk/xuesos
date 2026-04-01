@@ -26,6 +26,7 @@ type Lexer struct {
 	col         int // current column in runes (1-based)
 	errors      []LexError
 	newlineSeen bool // whether a newline was seen since last token
+	pending     []Token // buffered tokens (for string interpolation)
 }
 
 // New creates a new Lexer for the given source.
@@ -155,6 +156,17 @@ func (l *Lexer) skipBlockComment() {
 
 // NextToken returns the next raw token (no semicolon insertion).
 func (l *Lexer) NextToken() Token {
+	// Drain pending buffer first (from string interpolation)
+	if len(l.pending) > 0 {
+		tok := l.pending[0]
+		l.pending = l.pending[1:]
+		return tok
+	}
+	return l.nextRawToken()
+}
+
+// nextRawToken scans the next token from source (used internally and for interpolation).
+func (l *Lexer) nextRawToken() Token {
 	l.skipWhitespaceAndComments()
 
 	if l.isAtEnd() {
@@ -177,6 +189,8 @@ func (l *Lexer) NextToken() Token {
 		return l.makeToken(TOKEN_LBRACKET, "[", startPos)
 	case ']':
 		return l.makeToken(TOKEN_RBRACKET, "]", startPos)
+	case ':':
+		return l.makeToken(TOKEN_COLON, ":", startPos)
 	case ',':
 		return l.makeToken(TOKEN_COMMA, ",", startPos)
 	case '?':
@@ -260,11 +274,23 @@ func (l *Lexer) NextToken() Token {
 
 func (l *Lexer) scanString(startPos Position) Token {
 	var buf strings.Builder
+	hasInterp := false
+	var tokens []Token
+
 	for !l.isAtEnd() {
 		ch := l.peek()
 		if ch == '"' {
 			l.advance()
-			return l.makeToken(TOKEN_STRING, buf.String(), startPos)
+			if !hasInterp {
+				return l.makeToken(TOKEN_STRING, buf.String(), startPos)
+			}
+			// Emit final string part + INTERP_END
+			tokens = append(tokens, l.makeToken(TOKEN_STRING, buf.String(), l.currentPos()))
+			tokens = append(tokens, l.makeToken(TOKEN_INTERP_END, "", l.currentPos()))
+			// Return first token, buffer the rest
+			first := tokens[0]
+			l.pending = append(l.pending, tokens[1:]...)
+			return first
 		}
 		if ch == '\n' {
 			l.errorf(startPos, "unterminated string literal")
@@ -274,6 +300,38 @@ func (l *Lexer) scanString(startPos Position) Token {
 			l.advance()
 			escaped := l.scanEscape(startPos)
 			buf.WriteRune(escaped)
+			continue
+		}
+		if ch == '{' {
+			l.advance()
+			// Start interpolation
+			if !hasInterp {
+				hasInterp = true
+				tokens = append(tokens, l.makeToken(TOKEN_INTERP_START, "", startPos))
+			}
+			// Emit string part so far
+			tokens = append(tokens, l.makeToken(TOKEN_STRING, buf.String(), l.currentPos()))
+			buf.Reset()
+			// Lex expression tokens until matching }
+			depth := 1
+			for !l.isAtEnd() && depth > 0 {
+				l.skipWhitespaceAndComments()
+				if l.isAtEnd() {
+					break
+				}
+				if l.peek() == '}' {
+					depth--
+					if depth == 0 {
+						l.advance()
+						break
+					}
+				}
+				if l.peek() == '{' {
+					depth++
+				}
+				tok := l.nextRawToken()
+				tokens = append(tokens, tok)
+			}
 			continue
 		}
 		buf.WriteRune(ch)

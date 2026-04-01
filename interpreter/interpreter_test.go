@@ -842,3 +842,143 @@ func TestJoinInts(t *testing.T) {
 	`)
 	expectOutput(t, interp, "1+2+3")
 }
+
+// --- Map tests ---
+
+func TestMapLiteral(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"name": "xuesos", "version": "1.0"}
+		print(m["name"])
+		print(m["version"])
+	`)
+	expectOutput(t, interp, "xuesos", "1.0")
+}
+
+func TestMapAssign(t *testing.T) {
+	interp := run(t, `
+		xuiar m = {"x": 1}
+		m["y"] = 2
+		m["x"] = 10
+		print(m["x"])
+		print(m["y"])
+	`)
+	expectOutput(t, interp, "10", "2")
+}
+
+func TestMapLen(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"a": 1, "b": 2, "c": 3}
+		print(len(m))
+	`)
+	expectOutput(t, interp, "3")
+}
+
+func TestEmptyMap(t *testing.T) {
+	interp := run(t, `
+		xuiar m = {}
+		m["key"] = "value"
+		print(m["key"])
+		print(len(m))
+	`)
+	expectOutput(t, interp, "value", "1")
+}
+
+func TestMapContains(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"a": 1, "b": 2}
+		print(has_key(m, "a"))
+		print(has_key(m, "z"))
+	`)
+	expectOutput(t, interp, "xuitru", "xuinia")
+}
+
+func TestMapKeys(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"x": 1, "y": 2}
+		xuet k = keys(m)
+		print(len(k))
+	`)
+	expectOutput(t, interp, "2")
+}
+
+func TestMapValues(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"a": 10, "b": 20}
+		xuet v = values(m)
+		print(len(v))
+	`)
+	expectOutput(t, interp, "2")
+}
+
+func TestMapInLoop(t *testing.T) {
+	interp := run(t, `
+		xuet scores = {"alice": 90, "bob": 85}
+		xuiar total = 0
+		xuior (k xuin keys(scores)) {
+			total = total + scores[k]
+		}
+		print(total)
+	`)
+	expectOutput(t, interp, "175")
+}
+
+// --- String interpolation tests ---
+
+func TestStringInterpolation(t *testing.T) {
+	interp := run(t, `
+		xuet name = "Xuesos"
+		print("Hello {name}!")
+	`)
+	expectOutput(t, interp, "Hello Xuesos!")
+}
+
+func TestStringInterpolationExpr(t *testing.T) {
+	interp := run(t, `
+		print("2 + 2 = {2 + 2}")
+	`)
+	expectOutput(t, interp, "2 + 2 = 4")
+}
+
+func TestStringInterpolationMultiple(t *testing.T) {
+	interp := run(t, `
+		xuet a = 10
+		xuet b = 20
+		print("{a} + {b} = {a + b}")
+	`)
+	expectOutput(t, interp, "10 + 20 = 30")
+}
+
+func TestStringInterpolationNested(t *testing.T) {
+	interp := run(t, `
+		xuet arr = [1, 2, 3]
+		print("length is {len(arr)}")
+	`)
+	expectOutput(t, interp, "length is 3")
+}
+
+func TestStringNoInterpolation(t *testing.T) {
+	interp := run(t, `print("no braces here")`)
+	expectOutput(t, interp, "no braces here")
+}
+
+// --- Stdlib tests ---
+
+func TestMathStdlib(t *testing.T) {
+	interp := run(t, `
+		xuimport "math"
+		print(math_pi())
+		print(math_floor(3.7))
+		print(math_ceil(3.2))
+		print(math_pow(2, 10))
+	`)
+	expectOutput(t, interp, "3.141592653589793", "3", "4", "1024")
+}
+
+func TestOsStdlib(t *testing.T) {
+	interp := run(t, `
+		xuimport "os"
+		xuet args = os_args()
+		print(type(args))
+	`)
+	expectOutput(t, interp, "array")
+}

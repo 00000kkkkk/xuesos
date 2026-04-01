@@ -95,9 +95,14 @@ const (
 	TOKEN_RBRACE   // }
 	TOKEN_LBRACKET // [
 	TOKEN_RBRACKET // ]
+	TOKEN_COLON    // :
 	TOKEN_COMMA    // ,
 	TOKEN_DOT      // .
 	TOKEN_QUESTION // ?
+
+	// String interpolation
+	TOKEN_INTERP_START // start of interpolation segment
+	TOKEN_INTERP_END   // end of interpolation segment
 )
 
 var tokenNames = map[TokenType]string{
@@ -169,9 +174,13 @@ var tokenNames = map[TokenType]string{
 	TOKEN_RBRACE:   "}",
 	TOKEN_LBRACKET: "[",
 	TOKEN_RBRACKET: "]",
+	TOKEN_COLON:    ":",
 	TOKEN_COMMA:    ",",
 	TOKEN_DOT:      ".",
 	TOKEN_QUESTION: "?",
+
+	TOKEN_INTERP_START: "INTERP_START",
+	TOKEN_INTERP_END:   "INTERP_END",
 }
 
 func (t TokenType) String() string {

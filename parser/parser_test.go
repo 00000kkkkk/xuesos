@@ -720,3 +720,72 @@ func TestEmptyProgram(t *testing.T) {
 		t.Errorf("expected 0 statements, got %d", len(prog.Statements))
 	}
 }
+
+// --- Map tests ---
+
+func TestMapLiteral(t *testing.T) {
+	prog := parse(t, `xuet m = {"name": "xuesos", "version": "1.0"}`)
+	stmt := prog.Statements[0].(*XuetStatement)
+	ml, ok := stmt.Value.(*MapLiteral)
+	if !ok {
+		t.Fatalf("expected MapLiteral, got %T", stmt.Value)
+	}
+	if len(ml.Pairs) != 2 {
+		t.Fatalf("expected 2 pairs, got %d", len(ml.Pairs))
+	}
+}
+
+func TestEmptyMapLiteral(t *testing.T) {
+	prog := parse(t, `xuet m = {}`)
+	stmt := prog.Statements[0].(*XuetStatement)
+	ml, ok := stmt.Value.(*MapLiteral)
+	if !ok {
+		t.Fatalf("expected MapLiteral, got %T", stmt.Value)
+	}
+	if len(ml.Pairs) != 0 {
+		t.Fatalf("expected 0 pairs, got %d", len(ml.Pairs))
+	}
+}
+
+func TestMapAccess(t *testing.T) {
+	prog := parse(t, `m["key"]`)
+	stmt := prog.Statements[0].(*ExpressionStatement)
+	idx, ok := stmt.Expr.(*IndexExpression)
+	if !ok {
+		t.Fatalf("expected IndexExpression, got %T", stmt.Expr)
+	}
+	key, ok := idx.Index.(*StringLiteral)
+	if !ok {
+		t.Fatalf("expected StringLiteral index, got %T", idx.Index)
+	}
+	if key.Value != "key" {
+		t.Errorf("expected 'key', got %q", key.Value)
+	}
+}
+
+// --- String interpolation tests ---
+
+func TestStringInterpolation(t *testing.T) {
+	prog := parse(t, `xuet name = "world"
+xuet msg = "hello {name}!"`)
+	if len(prog.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(prog.Statements))
+	}
+	stmt := prog.Statements[1].(*XuetStatement)
+	// Should be an InterpolatedString or InfixExpression (concat)
+	_, isInterp := stmt.Value.(*InterpolatedString)
+	_, isInfix := stmt.Value.(*InfixExpression)
+	if !isInterp && !isInfix {
+		t.Fatalf("expected InterpolatedString or InfixExpression, got %T", stmt.Value)
+	}
+}
+
+func TestStringInterpolationExpression(t *testing.T) {
+	prog := parse(t, `"2 + 2 = {2 + 2}"`)
+	stmt := prog.Statements[0].(*ExpressionStatement)
+	_, isInterp := stmt.Expr.(*InterpolatedString)
+	_, isInfix := stmt.Expr.(*InfixExpression)
+	if !isInterp && !isInfix {
+		t.Fatalf("expected InterpolatedString or InfixExpression, got %T", stmt.Expr)
+	}
+}
