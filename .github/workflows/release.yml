@@ -34,7 +34,7 @@ jobs:
         run: GOOS=darwin GOARCH=arm64 go build -o xuesos-darwin-arm64 .
 
       - name: Build Windows amd64
-        run: GOOS=windows GOARCH=amd64 go build -o xuesos-windows-amd64.exe .
+        run: GOOS=windows GOARCH=amd64 go build -o xuesos.exe .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -44,5 +44,5 @@ jobs:
             xuesos-linux-arm64
             xuesos-darwin-amd64
             xuesos-darwin-arm64
-            xuesos-windows-amd64.exe
+            xuesos.exe
           generate_release_notes: true
