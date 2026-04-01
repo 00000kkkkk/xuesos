@@ -3,6 +3,7 @@ package xuesos
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/00000kkkkk/xusesosplusplus/interpreter"
@@ -46,21 +47,36 @@ func runRun(args []string) error {
 		return fmt.Errorf("parsing failed with %d error(s)", len(parseErrs))
 	}
 
-	// Type check
-	tc := typechecker.New()
-	typeErrs := tc.Check(program)
-	if len(typeErrs) > 0 {
-		for _, e := range typeErrs {
-			fmt.Fprintf(os.Stderr, "type error: %s\n", e)
+	// Type check (skip if file has external imports — they're resolved at runtime)
+	if !hasFileImports(program) {
+		tc := typechecker.New()
+		typeErrs := tc.Check(program)
+		if len(typeErrs) > 0 {
+			for _, e := range typeErrs {
+				fmt.Fprintf(os.Stderr, "type error: %s\n", e)
+			}
+			return fmt.Errorf("type checking failed with %d error(s)", len(typeErrs))
 		}
-		return fmt.Errorf("type checking failed with %d error(s)", len(typeErrs))
 	}
 
 	// Interpret
 	interp := interpreter.New()
+	interp.Imports = interpreter.NewImportResolver(filepath.Dir(filename))
 	if err := interp.Run(program); err != nil {
 		return fmt.Errorf("runtime error: %s", err)
 	}
 
 	return nil
+}
+
+func hasFileImports(program *parser.Program) bool {
+	stdlibs := map[string]bool{"math": true, "os": true, "io": true, "fmt": true}
+	for _, stmt := range program.Statements {
+		if imp, ok := stmt.(*parser.XuimportStatement); ok {
+			if !stdlibs[imp.Path] {
+				return true
+			}
+		}
+	}
+	return false
 }

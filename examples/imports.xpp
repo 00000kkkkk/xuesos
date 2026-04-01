@@ -1,0 +1,7 @@
+// Multi-file imports in Xuesos++
+xuimport "mylib"
+
+xuen main() {
+    print(double(21))
+    print(greet("Xuesos"))
+}

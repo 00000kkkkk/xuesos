@@ -15,6 +15,7 @@ type Interpreter struct {
 	globals    *Environment
 	structDefs map[string]*StructDef
 	output     []string // captured output for testing
+	Imports    *ImportResolver
 }
 
 // New creates a new interpreter with built-in functions.
@@ -553,7 +554,11 @@ func (i *Interpreter) execStatement(stmt parser.Statement, env *Environment) (*V
 	case *parser.XuenumStatement:
 		return i.execXuenum(s, env)
 	case *parser.XuimportStatement:
-		// imports are no-ops for now
+		if i.Imports != nil {
+			if err := i.Imports.Resolve(s.Path, i); err != nil {
+				return nil, err
+			}
+		}
 		return nil, nil
 	case *parser.XuiatchStatement:
 		return i.execXuiatch(s, env)

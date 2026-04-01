@@ -16,6 +16,8 @@ func Execute(args []string) error {
 		return runRun(args[1:])
 	case "repl":
 		return runRepl()
+	case "fmt":
+		return runFmt(args[1:])
 	case "version":
 		return runVersion()
 	case "help":
@@ -36,6 +38,7 @@ Commands:
   build <file.xpp>    Compile a Xuesos++ source file
   run <file.xpp>      Compile and run a Xuesos++ source file
   repl                 Start interactive REPL
+  fmt <file.xpp>       Format a source file
   version              Show compiler version
   help                 Show this help message`)
 }

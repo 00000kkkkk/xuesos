@@ -1,0 +1,8 @@
+// A reusable library for Xuesos++
+xuen double(n int) int {
+    xueturn n * 2
+}
+
+xuen greet(name str) str {
+    xueturn "Hello, {name}!"
+}
