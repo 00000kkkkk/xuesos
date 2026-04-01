@@ -4,27 +4,51 @@ A compiled programming language with unique xui-style syntax, inspired by Rust, 
 
 **Speed of C. Simplicity of Go. Xui-style of Xuesos++.**
 
+## Install
+
+### Download binary (no dependencies)
+
+**Linux/macOS:**
+```bash
+curl -L https://github.com/00000kkkkk/xusesosplusplus/releases/latest/download/xuesos-linux-amd64 -o xuesos
+chmod +x xuesos
+sudo mv xuesos /usr/local/bin/
+```
+
+**Windows:** download `xuesos-windows-amd64.exe` from [Releases](https://github.com/00000kkkkk/xusesosplusplus/releases) and add to PATH.
+
+**macOS (Apple Silicon):**
+```bash
+curl -L https://github.com/00000kkkkk/xusesosplusplus/releases/latest/download/xuesos-darwin-arm64 -o xuesos
+chmod +x xuesos
+sudo mv xuesos /usr/local/bin/
+```
+
+### Build from source (requires Go 1.24+)
+```bash
+git clone https://github.com/00000kkkkk/xusesosplusplus.git
+cd xusesosplusplus
+go build -o xuesos .
+```
+
 ## Quick Start
 
 ```bash
-# Run a program (interpreted)
-go run . run examples/hello.xpp
+# Run a program
+xuesos run examples/hello.xpp
 
-# Compile to binary (via C)
-go run . build examples/fibonacci.xpp
+# Compile to native binary (via C, requires gcc)
+xuesos build examples/fibonacci.xpp
 ./fibonacci
 
 # Interactive REPL
-go run . repl
+xuesos repl
 
 # Format code
-go run . fmt myfile.xpp
-
-# Start LSP server (for editor integration)
-go run . lsp
+xuesos fmt myfile.xpp
 
 # Show version
-go run . version
+xuesos version
 ```
 
 ## Syntax

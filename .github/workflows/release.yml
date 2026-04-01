@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build Linux amd64
+        run: GOOS=linux GOARCH=amd64 go build -o xuesos-linux-amd64 .
+
+      - name: Build Linux arm64
+        run: GOOS=linux GOARCH=arm64 go build -o xuesos-linux-arm64 .
+
+      - name: Build macOS amd64
+        run: GOOS=darwin GOARCH=amd64 go build -o xuesos-darwin-amd64 .
+
+      - name: Build macOS arm64
+        run: GOOS=darwin GOARCH=arm64 go build -o xuesos-darwin-arm64 .
+
+      - name: Build Windows amd64
+        run: GOOS=windows GOARCH=amd64 go build -o xuesos-windows-amd64.exe .
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            xuesos-linux-amd64
+            xuesos-linux-arm64
+            xuesos-darwin-amd64
+            xuesos-darwin-arm64
+            xuesos-windows-amd64.exe
+          generate_release_notes: true

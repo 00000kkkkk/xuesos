@@ -1,0 +1,7 @@
+xuesos
+xuesos.exe
+*.c
+!codegen/runtime/runtime.c
+*.o
+*.out
+.claude/
