@@ -2,28 +2,41 @@ package interpreter
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/00000kkkkk/xusesosplusplus/parser"
 )
 
+// InterfaceDef stores an interface (trait) definition.
+type InterfaceDef struct {
+	Name    string
+	Methods []string // required method names
+}
+
 // Interpreter evaluates an AST.
 type Interpreter struct {
-	globals    *Environment
-	structDefs map[string]*StructDef
-	output     []string // captured output for testing
-	Imports    *ImportResolver
+	globals       *Environment
+	structDefs    map[string]*StructDef
+	interfaceDefs map[string]*InterfaceDef
+	output        []string // captured output for testing
+	Imports       *ImportResolver
 }
 
 // New creates a new interpreter with built-in functions.
 func New() *Interpreter {
 	interp := &Interpreter{
-		globals:    NewEnvironment(),
-		structDefs: make(map[string]*StructDef),
+		globals:       NewEnvironment(),
+		structDefs:    make(map[string]*StructDef),
+		interfaceDefs: make(map[string]*InterfaceDef),
 	}
 	interp.registerBuiltins()
 	return interp
@@ -698,6 +711,270 @@ func (i *Interpreter) registerBuiltins() {
 			return IntVal(0), nil
 		}
 	}}, false)
+
+	// --- HTTP Client built-ins ---
+
+	// http_get(url) — returns response body as string
+	i.globals.Define("http_get", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("http_get() takes 1 string argument")
+		}
+		resp, err := http.Get(args[0].StringVal)
+		if err != nil {
+			return nil, fmt.Errorf("http_get: %s", err)
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("http_get: %s", err)
+		}
+		return StringVal(string(body)), nil
+	}}, false)
+
+	// http_status(url) — returns HTTP status code as int
+	i.globals.Define("http_status", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("http_status() takes 1 string argument")
+		}
+		resp, err := http.Get(args[0].StringVal)
+		if err != nil {
+			return nil, fmt.Errorf("http_status: %s", err)
+		}
+		defer resp.Body.Close()
+		return IntVal(int64(resp.StatusCode)), nil
+	}}, false)
+
+	// --- JSON built-ins ---
+
+	// json_parse(str) — parse JSON string into Xuesos++ value
+	i.globals.Define("json_parse", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("json_parse() takes 1 string argument")
+		}
+		var raw interface{}
+		if err := json.Unmarshal([]byte(args[0].StringVal), &raw); err != nil {
+			return nil, fmt.Errorf("json_parse: %s", err)
+		}
+		return goToXuesos(raw), nil
+	}}, false)
+
+	// json_stringify(value) — convert Xuesos++ value to JSON string
+	i.globals.Define("json_stringify", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("json_stringify() takes 1 argument")
+		}
+		result := xuesosToGo(args[0])
+		data, err := json.Marshal(result)
+		if err != nil {
+			return nil, fmt.Errorf("json_stringify: %s", err)
+		}
+		return StringVal(string(data)), nil
+	}}, false)
+
+	// --- Filesystem built-ins ---
+
+	// file_exists(path) — check if file exists
+	i.globals.Define("file_exists", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("file_exists() takes 1 string argument")
+		}
+		_, err := os.Stat(args[0].StringVal)
+		return BoolValue(err == nil), nil
+	}}, false)
+
+	// list_dir(path) — list files in directory
+	i.globals.Define("list_dir", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("list_dir() takes 1 string argument")
+		}
+		entries, err := os.ReadDir(args[0].StringVal)
+		if err != nil {
+			return nil, fmt.Errorf("list_dir: %s", err)
+		}
+		elems := make([]*Value, len(entries))
+		for idx, e := range entries {
+			elems[idx] = StringVal(e.Name())
+		}
+		return ArrayValue(elems), nil
+	}}, false)
+
+	// mkdir(path) — create directory
+	i.globals.Define("mkdir", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("mkdir() takes 1 string argument")
+		}
+		return NullValue(), os.MkdirAll(args[0].StringVal, 0755)
+	}}, false)
+
+	// remove(path) — delete file or empty directory
+	i.globals.Define("remove", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRING {
+			return nil, fmt.Errorf("remove() takes 1 string argument")
+		}
+		return NullValue(), os.Remove(args[0].StringVal)
+	}}, false)
+
+	// path_join(parts...) — join path components
+	i.globals.Define("path_join", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		parts := make([]string, len(args))
+		for idx, a := range args {
+			parts[idx] = a.String()
+		}
+		return StringVal(filepath.Join(parts...)), nil
+	}}, false)
+
+	// implements(value, interfaceName) — check if a struct implements an interface
+	i.globals.Define("implements", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 {
+			return nil, fmt.Errorf("implements() takes 2 arguments (value, interfaceName)")
+		}
+		if args[1].Type != VAL_STRING {
+			return nil, fmt.Errorf("implements() second argument must be a string (interface name)")
+		}
+		ifaceName := args[1].StringVal
+		ifaceDef, ok := i.interfaceDefs[ifaceName]
+		if !ok {
+			return nil, fmt.Errorf("implements(): unknown interface %q", ifaceName)
+		}
+		if args[0].Type != VAL_STRUCT {
+			return BoolValue(false), nil
+		}
+		structName := args[0].StructVal.TypeName
+		structDef, ok := i.structDefs[structName]
+		if !ok {
+			return BoolValue(false), nil
+		}
+		for _, methodName := range ifaceDef.Methods {
+			if _, exists := structDef.Methods[methodName]; !exists {
+				return BoolValue(false), nil
+			}
+		}
+		return BoolValue(true), nil
+	}}, false)
+
+	// cast_int(value) — force cast to int
+	i.globals.Define("cast_int", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("cast_int() takes 1 argument")
+		}
+		switch args[0].Type {
+		case VAL_INT:
+			return args[0], nil
+		case VAL_FLOAT:
+			return IntVal(int64(args[0].FloatVal)), nil
+		case VAL_BOOL:
+			if args[0].BoolVal {
+				return IntVal(1), nil
+			}
+			return IntVal(0), nil
+		case VAL_STRING:
+			v, err := strconv.ParseInt(args[0].StringVal, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot cast %q to int", args[0].StringVal)
+			}
+			return IntVal(v), nil
+		default:
+			return nil, fmt.Errorf("cannot cast %s to int", args[0].Type)
+		}
+	}}, false)
+
+	// cast_float(value) — force cast to float
+	i.globals.Define("cast_float", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("cast_float() takes 1 argument")
+		}
+		switch args[0].Type {
+		case VAL_FLOAT:
+			return args[0], nil
+		case VAL_INT:
+			return FloatVal(float64(args[0].IntVal)), nil
+		case VAL_STRING:
+			v, err := strconv.ParseFloat(args[0].StringVal, 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot cast %q to float", args[0].StringVal)
+			}
+			return FloatVal(v), nil
+		default:
+			return nil, fmt.Errorf("cannot cast %s to float", args[0].Type)
+		}
+	}}, false)
+
+	// cast_str(value) — force cast to string
+	i.globals.Define("cast_str", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("cast_str() takes 1 argument")
+		}
+		return StringVal(args[0].String()), nil
+	}}, false)
+
+	// cast_bool(value) — force cast to bool
+	i.globals.Define("cast_bool", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("cast_bool() takes 1 argument")
+		}
+		return BoolValue(args[0].IsTruthy()), nil
+	}}, false)
+}
+
+func goToXuesos(v interface{}) *Value {
+	switch val := v.(type) {
+	case nil:
+		return NullValue()
+	case bool:
+		return BoolValue(val)
+	case float64:
+		if val == float64(int64(val)) {
+			return IntVal(int64(val))
+		}
+		return FloatVal(val)
+	case string:
+		return StringVal(val)
+	case []interface{}:
+		elems := make([]*Value, len(val))
+		for i, elem := range val {
+			elems[i] = goToXuesos(elem)
+		}
+		return ArrayValue(elems)
+	case map[string]interface{}:
+		pairs := make(map[string]*Value)
+		keys := make([]string, 0, len(val))
+		for k, v := range val {
+			pairs[k] = goToXuesos(v)
+			keys = append(keys, k)
+		}
+		return MapVal(pairs, keys)
+	default:
+		return StringVal(fmt.Sprintf("%v", val))
+	}
+}
+
+func xuesosToGo(v *Value) interface{} {
+	switch v.Type {
+	case VAL_INT:
+		return v.IntVal
+	case VAL_FLOAT:
+		return v.FloatVal
+	case VAL_STRING:
+		return v.StringVal
+	case VAL_BOOL:
+		return v.BoolVal
+	case VAL_NULL:
+		return nil
+	case VAL_ARRAY:
+		result := make([]interface{}, len(v.ArrayVal))
+		for i, elem := range v.ArrayVal {
+			result[i] = xuesosToGo(elem)
+		}
+		return result
+	case VAL_MAP:
+		result := make(map[string]interface{})
+		for k, val := range v.MapVal.Pairs {
+			result[k] = xuesosToGo(val)
+		}
+		return result
+	default:
+		return v.String()
+	}
 }
 
 func toFloat(v *Value) (float64, bool) {
@@ -749,6 +1026,8 @@ func (i *Interpreter) execStatement(stmt parser.Statement, env *Environment) (*V
 		return i.execXuiatch(s, env)
 	case *parser.TryStatement:
 		return i.execTry(s, env)
+	case *parser.XuinterfaceStatement:
+		return i.execXuinterface(s)
 	case *parser.ExpressionStatement:
 		return i.evalExpression(s.Expr, env)
 	case *parser.BlockStatement:
@@ -1008,6 +1287,18 @@ func (i *Interpreter) execXuimpl(s *parser.XuimplStatement, env *Environment) (*
 	return nil, nil
 }
 
+func (i *Interpreter) execXuinterface(s *parser.XuinterfaceStatement) (*Value, error) {
+	methods := make([]string, len(s.Methods))
+	for idx, m := range s.Methods {
+		methods[idx] = m.Name
+	}
+	i.interfaceDefs[s.Name] = &InterfaceDef{
+		Name:    s.Name,
+		Methods: methods,
+	}
+	return nil, nil
+}
+
 func (i *Interpreter) execXuenum(s *parser.XuenumStatement, env *Environment) (*Value, error) {
 	for _, variant := range s.Variants {
 		env.Define(variant, &Value{
@@ -1221,6 +1512,44 @@ func (i *Interpreter) evalInfix(e *parser.InfixExpression, env *Environment) (*V
 	lf, rf, ok := toFloats(left, right)
 	if ok {
 		return i.evalFloatInfix(e.Operator, lf, rf, e)
+	}
+
+	// Check for operator overloading on structs
+	if left.Type == VAL_STRUCT {
+		methodName := ""
+		switch e.Operator {
+		case "+":
+			methodName = "__add"
+		case "-":
+			methodName = "__sub"
+		case "*":
+			methodName = "__mul"
+		case "==":
+			methodName = "__eq"
+		case "<":
+			methodName = "__lt"
+		case ">":
+			methodName = "__gt"
+		}
+		if methodName != "" {
+			def, ok := i.structDefs[left.StructVal.TypeName]
+			if ok {
+				if method, ok := def.Methods[methodName]; ok {
+					methodEnv := NewEnclosedEnvironment(method.Closure)
+					methodEnv.Define("self", left, true)
+					methodEnv.Define(method.ParamNames[1], right, true) // skip self, use second param
+					body := method.Body.(*parser.BlockStatement)
+					result, err := i.execBlock(body, methodEnv)
+					if err != nil {
+						return nil, err
+					}
+					if result != nil && result.Type == VAL_RETURN {
+						return result.ReturnVal, nil
+					}
+					return NullValue(), nil
+				}
+			}
+		}
 	}
 
 	return nil, fmt.Errorf("%s: unsupported operation %s %s %s", e.TokenPos(), left.Type, e.Operator, right.Type)

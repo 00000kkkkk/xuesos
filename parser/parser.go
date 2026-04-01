@@ -189,6 +189,8 @@ func (p *Parser) parseStatement() Statement {
 		stmt = p.parseXuiatchStatement()
 	case lexer.TOKEN_XUTRY:
 		stmt = p.parseTryStatement()
+	case lexer.TOKEN_XUINTERFACE:
+		stmt = p.parseXuinterfaceStatement()
 	default:
 		stmt = p.parseExpressionOrAssignStatement()
 	}
@@ -462,6 +464,53 @@ func (p *Parser) parseXuimplStatement() Statement {
 	p.expect(lexer.TOKEN_RBRACE)
 
 	return &XuimplStatement{
+		Pos:     pos,
+		Name:    name,
+		Methods: methods,
+	}
+}
+
+func (p *Parser) parseXuinterfaceStatement() Statement {
+	pos := p.advance().Pos // consume xuinterface
+	name := p.expect(lexer.TOKEN_IDENT).Literal
+
+	p.expect(lexer.TOKEN_LBRACE)
+	p.skipSemicolons()
+
+	var methods []InterfaceMethod
+	for p.current().Type != lexer.TOKEN_RBRACE && !p.isAtEnd() {
+		methodName := p.expect(lexer.TOKEN_IDENT).Literal
+		p.expect(lexer.TOKEN_LPAREN)
+
+		var paramTypes []string
+		for p.current().Type != lexer.TOKEN_RPAREN && !p.isAtEnd() {
+			typeName := p.parseTypeName()
+			paramTypes = append(paramTypes, typeName)
+			if p.current().Type == lexer.TOKEN_COMMA {
+				p.advance()
+			}
+		}
+		p.expect(lexer.TOKEN_RPAREN)
+
+		var returnType string
+		// Check if next token is a type name (not a semicolon or closing brace)
+		if p.current().Type != lexer.TOKEN_SEMICOLON &&
+			p.current().Type != lexer.TOKEN_RBRACE &&
+			!p.isAtEnd() {
+			returnType = p.parseTypeName()
+		}
+
+		methods = append(methods, InterfaceMethod{
+			Name:       methodName,
+			ParamTypes: paramTypes,
+			ReturnType: returnType,
+		})
+		p.skipSemicolons()
+	}
+
+	p.expect(lexer.TOKEN_RBRACE)
+
+	return &XuinterfaceStatement{
 		Pos:     pos,
 		Name:    name,
 		Methods: methods,

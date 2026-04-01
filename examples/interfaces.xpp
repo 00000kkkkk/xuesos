@@ -1,0 +1,38 @@
+// Interfaces in Xuesos++
+
+xuinterface Shape {
+    area() float
+}
+
+xuiruct Circle {
+    radius float
+}
+
+xuimpl Circle {
+    xuen area(self) float {
+        xueturn 3.14159 * self.radius * self.radius
+    }
+}
+
+xuiruct Rectangle {
+    width float
+    height float
+}
+
+xuimpl Rectangle {
+    xuen area(self) float {
+        xueturn self.width * self.height
+    }
+}
+
+xuen print_area(shape) {
+    print("Area: {shape.area()}")
+}
+
+xuen main() {
+    xuet c = Circle { radius = 5.0 }
+    xuet r = Rectangle { width = 10.0, height = 3.0 }
+
+    print_area(c)
+    print_area(r)
+}

@@ -235,6 +235,23 @@ func (s *XuiatchStatement) stmtNode()                {}
 func (s *XuiatchStatement) TokenPos() lexer.Position  { return s.Pos }
 func (s *XuiatchStatement) nodeType() string          { return "XuiatchStatement" }
 
+// XuinterfaceStatement: xuinterface Name { method signatures }
+type XuinterfaceStatement struct {
+	Pos     lexer.Position
+	Name    string
+	Methods []InterfaceMethod
+}
+
+type InterfaceMethod struct {
+	Name       string
+	ParamTypes []string
+	ReturnType string
+}
+
+func (s *XuinterfaceStatement) stmtNode()               {}
+func (s *XuinterfaceStatement) TokenPos() lexer.Position { return s.Pos }
+func (s *XuinterfaceStatement) nodeType() string         { return "XuinterfaceStatement" }
+
 // --- Expressions ---
 
 // Identifier: foo, bar, self

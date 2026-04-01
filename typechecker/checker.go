@@ -145,6 +145,30 @@ func (c *Checker) registerBuiltins() {
 	c.scope.define("channel", &FuncType{ReturnType: TypeVoid}, false)
 	c.scope.define("send", &FuncType{ReturnType: TypeVoid}, false)
 	c.scope.define("recv", &FuncType{ReturnType: TypeVoid}, false)
+
+	// HTTP built-ins
+	c.scope.define("http_get", &FuncType{ReturnType: TypeStr}, false)
+	c.scope.define("http_status", &FuncType{ReturnType: TypeInt}, false)
+
+	// JSON built-ins
+	c.scope.define("json_parse", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("json_stringify", &FuncType{ReturnType: TypeStr}, false)
+
+	// Filesystem built-ins
+	c.scope.define("file_exists", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("list_dir", &FuncType{ReturnType: &ArrayType{ElementType: TypeStr}}, false)
+	c.scope.define("mkdir", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("remove", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("path_join", &FuncType{ReturnType: TypeStr}, false)
+
+	// Interface built-ins
+	c.scope.define("implements", &FuncType{ReturnType: TypeBool}, false)
+
+	// Type casting built-ins
+	c.scope.define("cast_int", &FuncType{ReturnType: TypeInt}, false)
+	c.scope.define("cast_float", &FuncType{ReturnType: TypeFloat}, false)
+	c.scope.define("cast_str", &FuncType{ReturnType: TypeStr}, false)
+	c.scope.define("cast_bool", &FuncType{ReturnType: TypeBool}, false)
 }
 
 // Check type-checks a program and returns any errors.
@@ -216,6 +240,9 @@ func (c *Checker) registerDeclaration(stmt parser.Statement) {
 		ft := &FuncType{ParamTypes: paramTypes, ReturnType: retType}
 		c.funcTypes[s.Name] = ft
 		c.scope.define(s.Name, ft, false)
+
+	case *parser.XuinterfaceStatement:
+		// Interfaces are registered but no deeper checks needed
 	}
 }
 
@@ -255,6 +282,8 @@ func (c *Checker) checkStatement(stmt parser.Statement) {
 		c.checkBlock(s)
 	case *parser.XueakStatement, *parser.XuitinueStatement:
 		// valid in loops, no type to check
+	case *parser.XuinterfaceStatement:
+		// registered in first pass, no body to check
 	}
 }
 

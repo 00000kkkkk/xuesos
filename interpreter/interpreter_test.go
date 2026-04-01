@@ -1179,3 +1179,123 @@ func TestSizeof(t *testing.T) {
 	`)
 	expectOutput(t, interp, "8", "5")
 }
+
+// --- JSON built-in tests ---
+
+func TestJsonParse(t *testing.T) {
+	interp := run(t, `
+		xuet data = json_parse("{\"name\": \"xuesos\", \"version\": 1}")
+		print(data["name"])
+		print(data["version"])
+	`)
+	expectOutput(t, interp, "xuesos", "1")
+}
+
+func TestJsonStringify(t *testing.T) {
+	interp := run(t, `
+		xuet m = {"a": 1, "b": 2}
+		xuet s = json_stringify(m)
+		print(type(s))
+	`)
+	expectOutput(t, interp, "str")
+}
+
+// --- Filesystem built-in tests ---
+
+func TestFileExists(t *testing.T) {
+	interp := run(t, `
+		print(file_exists("interpreter.go"))
+		print(file_exists("nonexistent.xyz"))
+	`)
+	expectOutput(t, interp, "xuitru", "xuinia")
+}
+
+func TestPathJoin(t *testing.T) {
+	interp := run(t, `
+		xuet p = path_join("a", "b", "c.txt")
+		print(contains(p, "b"))
+	`)
+	expectOutput(t, interp, "xuitru")
+}
+
+// --- Interface (xuinterface) tests ---
+
+func TestInterface(t *testing.T) {
+	interp := run(t, `
+		xuinterface Shape {
+			area() float
+		}
+		xuiruct Circle {
+			radius float
+		}
+		xuimpl Circle {
+			xuen area(self) float {
+				xueturn 3.14 * self.radius * self.radius
+			}
+		}
+		xuet c = Circle { radius = 5.0 }
+		print(c.area())
+	`)
+	expectOutput(t, interp, "78.5")
+}
+
+func TestImplementsBuiltin(t *testing.T) {
+	interp := run(t, `
+		xuinterface Drawable {
+			draw()
+		}
+		xuiruct Box {
+			width float
+		}
+		xuimpl Box {
+			xuen draw(self) {
+				print("drawing box")
+			}
+		}
+		xuiruct Plain {
+			x int
+		}
+		xuet b = Box { width = 10.0 }
+		xuet p = Plain { x = 1 }
+		print(implements(b, "Drawable"))
+		print(implements(p, "Drawable"))
+	`)
+	expectOutput(t, interp, "xuitru", "xuinia")
+}
+
+func TestOperatorOverloading(t *testing.T) {
+	interp := run(t, `
+		xuiruct Vec2 {
+			x float
+			y float
+		}
+		xuimpl Vec2 {
+			xuen __add(self, other Vec2) Vec2 {
+				xueturn Vec2 { x = self.x + other.x, y = self.y + other.y }
+			}
+		}
+		xuet a = Vec2 { x = 1.0, y = 2.0 }
+		xuet b = Vec2 { x = 3.0, y = 4.0 }
+		xuet c = a + b
+		print(c.x)
+		print(c.y)
+	`)
+	expectOutput(t, interp, "4", "6")
+}
+
+func TestCastInt(t *testing.T) {
+	interp := run(t, `
+		print(cast_int("42"))
+		print(cast_int(3.14))
+		print(cast_int(xuitru))
+	`)
+	expectOutput(t, interp, "42", "3", "1")
+}
+
+func TestCastStr(t *testing.T) {
+	interp := run(t, `
+		print(cast_str(42))
+		print(cast_str(3.14))
+	`)
+	expectOutput(t, interp, "42", "3.14")
+}

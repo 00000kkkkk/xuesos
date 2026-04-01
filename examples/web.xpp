@@ -1,0 +1,18 @@
+// HTTP and JSON in Xuesos++
+
+xuen main() {
+    // JSON parsing
+    xuet json_str = "{\"name\": \"Xuesos++\", \"version\": 1, \"features\": [\"fast\", \"simple\", \"xui\"]}"
+    xuet data = json_parse(json_str)
+    print("Name: {data["name"]}")
+    print("Version: {data["version"]}")
+    print("Features: {data["features"]}")
+
+    // JSON stringify
+    xuet obj = {"lang": "xuesos", "year": 2025}
+    print("JSON: {json_stringify(obj)}")
+
+    // File system
+    print("go.mod exists: {file_exists("go.mod")}")
+    print("fake.txt exists: {file_exists("fake.txt")}")
+}

@@ -13,6 +13,7 @@ type CCodegen struct {
 	indent      int
 	structDefs  map[string]*parser.XuiructStatement
 	implDefs    map[string]*parser.XuimplStatement
+	varTypes    map[string]string // variable name -> C type
 	tempCounter int
 }
 
@@ -21,6 +22,7 @@ func New() *CCodegen {
 	return &CCodegen{
 		structDefs: make(map[string]*parser.XuiructStatement),
 		implDefs:   make(map[string]*parser.XuimplStatement),
+		varTypes:   make(map[string]string),
 	}
 }
 
@@ -52,6 +54,11 @@ func (g *CCodegen) Generate(program *parser.Program) string {
 	g.writeln("  XppString r; r.len = a.len + b.len; r.data = malloc(r.len+1);")
 	g.writeln("  memcpy(r.data, a.data, a.len); memcpy(r.data+a.len, b.data, b.len+1); return r;")
 	g.writeln("}")
+	g.writeln("int xpp_streq(const char* a, const char* b) { return strcmp(a, b) == 0; }")
+	g.writeln("")
+	// Error handling support for try/catch
+	g.writeln("static int _xpp_has_error = 0;")
+	g.writeln("static const char* _xpp_error_msg = \"\";")
 	g.writeln("")
 
 	// Forward declare all functions
@@ -298,6 +305,10 @@ func (g *CCodegen) emitStatement(stmt parser.Statement) {
 		g.emitXuior(s)
 	case *parser.XuileStatement:
 		g.emitXuile(s)
+	case *parser.XuiatchStatement:
+		g.emitXuiatch(s)
+	case *parser.TryStatement:
+		g.emitTry(s)
 	case *parser.ExpressionStatement:
 		g.writeIndent()
 		g.emitExpression(s.Expr)
@@ -313,6 +324,7 @@ func (g *CCodegen) emitStatement(stmt parser.Statement) {
 
 func (g *CCodegen) emitXuet(s *parser.XuetStatement) {
 	cType := g.inferCType(s.Value, s.TypeName)
+	g.varTypes[s.Name] = cType
 	g.writeIndent()
 	g.write(fmt.Sprintf("const %s %s = ", cType, s.Name))
 	g.emitExpression(s.Value)
@@ -321,6 +333,7 @@ func (g *CCodegen) emitXuet(s *parser.XuetStatement) {
 
 func (g *CCodegen) emitXuiar(s *parser.XuiarStatement) {
 	cType := g.inferCType(s.Value, s.TypeName)
+	g.varTypes[s.Name] = cType
 	g.writeIndent()
 	g.write(fmt.Sprintf("%s %s = ", cType, s.Name))
 	g.emitExpression(s.Value)
@@ -411,6 +424,78 @@ func (g *CCodegen) emitXuile(s *parser.XuileStatement) {
 	g.emitLine("}")
 }
 
+func (g *CCodegen) emitXuiatch(s *parser.XuiatchStatement) {
+	for i, arm := range s.Arms {
+		isDefault := false
+		if ident, ok := arm.Pattern.(*parser.Identifier); ok && ident.Value == "_" {
+			isDefault = true
+		}
+
+		if isDefault {
+			if i > 0 {
+				g.writeIndent()
+				g.writeln("} else {")
+			} else {
+				g.emitLine("{")
+			}
+		} else {
+			g.writeIndent()
+			if i > 0 {
+				g.write("} else if (")
+			} else {
+				g.write("if (")
+			}
+			// Use strcmp for string patterns, == for integers
+			if _, ok := arm.Pattern.(*parser.StringLiteral); ok {
+				g.write("strcmp(")
+				g.emitExpression(s.Value)
+				g.write(", ")
+				sl := arm.Pattern.(*parser.StringLiteral)
+				g.write(fmt.Sprintf("%q", sl.Value))
+				g.write(") == 0")
+			} else {
+				g.write("(")
+				g.emitExpression(s.Value)
+				g.write(") == (")
+				g.emitExpression(arm.Pattern)
+				g.write(")")
+			}
+			g.writeln(") {")
+		}
+
+		g.indent++
+		switch body := arm.Body.(type) {
+		case *parser.BlockStatement:
+			g.emitBlock(body)
+		case *parser.ExpressionStatement:
+			g.writeIndent()
+			g.emitExpression(body.Expr)
+			g.writeln(";")
+		default:
+			g.emitStatement(arm.Body)
+		}
+		g.indent--
+	}
+	g.emitLine("}")
+}
+
+func (g *CCodegen) emitTry(s *parser.TryStatement) {
+	// Emit try body directly, with error checking via the global flag
+	g.emitLine("_xpp_has_error = 0;")
+	g.emitLine("{")
+	g.indent++
+	g.emitBlock(s.Body)
+	g.indent--
+	g.emitLine("}")
+	g.writeIndent()
+	g.writeln("if (_xpp_has_error) {")
+	g.indent++
+	g.emitLine("const char* %s = _xpp_error_msg;", s.CatchVar)
+	g.emitBlock(s.CatchBody)
+	g.indent--
+	g.emitLine("}")
+}
+
 // --- Expression emission ---
 
 func (g *CCodegen) emitExpression(expr parser.Expression) {
@@ -420,7 +505,7 @@ func (g *CCodegen) emitExpression(expr parser.Expression) {
 	case *parser.FloatLiteral:
 		g.write(fmt.Sprintf("%s", e.Raw))
 	case *parser.StringLiteral:
-		g.write(fmt.Sprintf("xpp_str(%q)", e.Value))
+		g.write(fmt.Sprintf("%q", e.Value))
 	case *parser.CharLiteral:
 		g.write(fmt.Sprintf("'%c'", e.Value))
 	case *parser.BoolLiteral:
@@ -430,7 +515,7 @@ func (g *CCodegen) emitExpression(expr parser.Expression) {
 			g.write("false")
 		}
 	case *parser.NullLiteral:
-		g.write("0")
+		g.write("NULL")
 	case *parser.Identifier:
 		g.write(e.Value)
 	case *parser.PrefixExpression:
@@ -471,18 +556,35 @@ func (g *CCodegen) emitExpression(expr parser.Expression) {
 			g.emitExpression(f.Value)
 		}
 		g.write("}")
+	case *parser.MapLiteral:
+		g.emitMapLiteral(e)
+	case *parser.InterpolatedString:
+		g.emitInterpolatedString(e)
+	case *parser.LambdaExpression:
+		g.emitLambda(e)
+	case *parser.ThrowExpression:
+		g.emitThrow(e)
+	case *parser.AddressOfExpression:
+		g.write("&")
+		g.emitExpression(e.Value)
+	case *parser.DerefExpression:
+		g.write("(*")
+		g.emitExpression(e.Value)
+		g.write(")")
 	}
 }
 
 func (g *CCodegen) emitInfix(e *parser.InfixExpression) {
+	leftIsStr := g.isStringTypedExpr(e.Left)
+	rightIsStr := g.isStringTypedExpr(e.Right)
+
 	// String comparison
 	if e.Operator == "==" || e.Operator == "!=" {
-		// Check if either side is a string (heuristic — check for string literal)
-		if isStringExpr(e.Left) || isStringExpr(e.Right) {
+		if leftIsStr || rightIsStr {
 			if e.Operator == "!=" {
 				g.write("!")
 			}
-			g.write("xpp_string_eq(")
+			g.write("xpp_streq(")
 			g.emitExpression(e.Left)
 			g.write(", ")
 			g.emitExpression(e.Right)
@@ -491,8 +593,10 @@ func (g *CCodegen) emitInfix(e *parser.InfixExpression) {
 		}
 	}
 
-	// String concatenation
-	if e.Operator == "+" && (isStringExpr(e.Left) || isStringExpr(e.Right)) {
+	// String concatenation — not directly supported in C, emit a comment placeholder
+	// For simple cases we can use snprintf pattern, but keep it minimal
+	if e.Operator == "+" && (leftIsStr || rightIsStr) {
+		// Emit as a runtime concat helper call
 		g.write("xpp_str_concat(")
 		g.emitExpression(e.Left)
 		g.write(", ")
@@ -583,31 +687,153 @@ func (g *CCodegen) emitPrintCall(args []parser.Expression) {
 			g.write(fmt.Sprintf(`printf("%%s\n", %q)`, e.Value))
 		case *parser.IntegerLiteral:
 			g.write(fmt.Sprintf(`printf("%%lld\n", (long long)%dLL)`, e.Value))
+		case *parser.FloatLiteral:
+			g.write(fmt.Sprintf(`printf("%%f\n", %s)`, e.Raw))
+		case *parser.BoolLiteral:
+			if e.Value {
+				g.write(`printf("%s\n", "true")`)
+			} else {
+				g.write(`printf("%s\n", "false")`)
+			}
 		case *parser.Identifier:
-			// Default to %lld for now; a real compiler would check types
-			g.write(fmt.Sprintf(`printf("%%lld\n", (long long)%s)`, e.Value))
+			if t, ok := g.varTypes[e.Value]; ok && t == "const char*" {
+				g.write(fmt.Sprintf(`printf("%%s\n", %s)`, e.Value))
+			} else if t == "double" {
+				g.write(fmt.Sprintf(`printf("%%f\n", %s)`, e.Value))
+			} else if t == "bool" {
+				g.write(fmt.Sprintf(`printf("%%s\n", %s ? "true" : "false")`, e.Value))
+			} else {
+				g.write(fmt.Sprintf(`printf("%%lld\n", (long long)%s)`, e.Value))
+			}
+		case *parser.InterpolatedString:
+			g.emitPrintInterpolated(e)
 		default:
-			g.write(`printf("%lld\n", (long long)`)
-			g.emitExpression(arg)
-			g.write(")")
+			// Check if the expression looks like a string type
+			if g.isStringTypedExpr(arg) {
+				g.write(`printf("%s\n", `)
+				g.emitExpression(arg)
+				g.write(")")
+			} else {
+				g.write(`printf("%lld\n", (long long)`)
+				g.emitExpression(arg)
+				g.write(")")
+			}
 		}
 		return
 	}
 
-	// Multiple args: print space-separated
+	// Multiple args: print space-separated, detect types
 	g.write(`printf("`)
-	for i := range args {
+	for i, arg := range args {
 		if i > 0 {
 			g.write(" ")
 		}
-		g.write("%lld")
+		g.write(g.printfFormatFor(arg))
 	}
 	g.write(`\n"`)
 	for _, arg := range args {
-		g.write(", (long long)")
-		g.emitExpression(arg)
+		g.write(", ")
+		g.emitPrintArg(arg)
 	}
 	g.write(")")
+}
+
+func (g *CCodegen) printfFormatFor(arg parser.Expression) string {
+	switch arg.(type) {
+	case *parser.StringLiteral:
+		return "%s"
+	case *parser.FloatLiteral:
+		return "%f"
+	case *parser.BoolLiteral:
+		return "%s"
+	}
+	if ident, ok := arg.(*parser.Identifier); ok {
+		if t, ok := g.varTypes[ident.Value]; ok {
+			switch t {
+			case "const char*":
+				return "%s"
+			case "double":
+				return "%f"
+			case "bool":
+				return "%s"
+			}
+		}
+	}
+	return "%lld"
+}
+
+func (g *CCodegen) emitPrintArg(arg parser.Expression) {
+	switch e := arg.(type) {
+	case *parser.StringLiteral:
+		g.write(fmt.Sprintf("%q", e.Value))
+	case *parser.BoolLiteral:
+		if e.Value {
+			g.write(`"true"`)
+		} else {
+			g.write(`"false"`)
+		}
+	case *parser.Identifier:
+		if t, ok := g.varTypes[e.Value]; ok {
+			if t == "bool" {
+				g.write(fmt.Sprintf(`%s ? "true" : "false"`, e.Value))
+				return
+			}
+			if t == "const char*" || t == "double" {
+				g.write(e.Value)
+				return
+			}
+		}
+		g.write(fmt.Sprintf("(long long)%s", e.Value))
+	default:
+		g.write("(long long)")
+		g.emitExpression(arg)
+	}
+}
+
+func (g *CCodegen) emitPrintInterpolated(e *parser.InterpolatedString) {
+	// Build printf format string and args from interpolated parts
+	g.write(`printf("`)
+	for _, part := range e.Parts {
+		if _, ok := part.(*parser.StringLiteral); ok {
+			sl := part.(*parser.StringLiteral)
+			// Escape % in format string
+			escaped := strings.ReplaceAll(sl.Value, "%", "%%")
+			escaped = strings.ReplaceAll(escaped, "\\", "\\\\")
+			escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+			g.write(escaped)
+		} else {
+			g.write(g.printfFormatFor(part))
+		}
+	}
+	g.write(`\n"`)
+	for _, part := range e.Parts {
+		if _, ok := part.(*parser.StringLiteral); ok {
+			continue
+		}
+		g.write(", ")
+		g.emitPrintArg(part)
+	}
+	g.write(")")
+}
+
+func (g *CCodegen) isStringTypedExpr(expr parser.Expression) bool {
+	if isStringExpr(expr) {
+		return true
+	}
+	if ident, ok := expr.(*parser.Identifier); ok {
+		if t, ok := g.varTypes[ident.Value]; ok {
+			return t == "const char*"
+		}
+	}
+	if infix, ok := expr.(*parser.InfixExpression); ok {
+		if infix.Operator == "+" && (isStringExpr(infix.Left) || isStringExpr(infix.Right)) {
+			return true
+		}
+	}
+	if _, ok := expr.(*parser.InterpolatedString); ok {
+		return true
+	}
+	return false
 }
 
 func (g *CCodegen) emitMember(e *parser.MemberExpression) {
@@ -616,19 +842,60 @@ func (g *CCodegen) emitMember(e *parser.MemberExpression) {
 	g.write(e.Member)
 }
 
+func (g *CCodegen) emitMapLiteral(e *parser.MapLiteral) {
+	// Maps are emitted as a comment + NULL placeholder since C has no native map type.
+	// A real implementation would use a hash table library.
+	g.write("/* map literal */ NULL")
+}
+
+func (g *CCodegen) emitInterpolatedString(e *parser.InterpolatedString) {
+	// For interpolated strings used as values, concatenate the string parts.
+	// Full support would require snprintf; for now emit the first string literal
+	// or a placeholder.
+	if len(e.Parts) == 1 {
+		g.emitExpression(e.Parts[0])
+		return
+	}
+	// Multiple parts: emit concatenation of string parts
+	// For simplicity, just emit the literal parts joined
+	g.write(`"`)
+	for _, part := range e.Parts {
+		if sl, ok := part.(*parser.StringLiteral); ok {
+			escaped := strings.ReplaceAll(sl.Value, "\"", "\\\"")
+			g.write(escaped)
+		} else {
+			g.write("%s") // placeholder for non-literal parts
+		}
+	}
+	g.write(`"`)
+}
+
+func (g *CCodegen) emitLambda(e *parser.LambdaExpression) {
+	// C doesn't have lambdas natively. Emit as a function pointer comment + NULL.
+	// For GCC/Clang with blocks or nested functions, we could do more.
+	g.write("/* lambda */ NULL")
+}
+
+func (g *CCodegen) emitThrow(e *parser.ThrowExpression) {
+	// Set the global error flag and message
+	g.write("(_xpp_has_error = 1, _xpp_error_msg = ")
+	g.emitExpression(e.Value)
+	g.write(")")
+}
+
 // --- Helpers ---
 
 func (g *CCodegen) inferCType(expr parser.Expression, declaredType string) string {
 	if declaredType != "" {
 		return g.mapType(declaredType)
 	}
-	switch expr.(type) {
+	switch e := expr.(type) {
 	case *parser.IntegerLiteral:
 		return "int64_t"
 	case *parser.FloatLiteral:
 		return "double"
 	case *parser.StringLiteral:
-		return "XppString"
+		return "const char*"
 	case *parser.BoolLiteral:
 		return "bool"
 	case *parser.CharLiteral:
@@ -636,9 +903,34 @@ func (g *CCodegen) inferCType(expr parser.Expression, declaredType string) strin
 	case *parser.ArrayLiteral:
 		return "int64_t*" // simplified
 	case *parser.StructLiteral:
-		if sl, ok := expr.(*parser.StructLiteral); ok {
-			return "struct " + sl.Name
+		return "struct " + e.Name
+	case *parser.InfixExpression:
+		if e.Operator == "+" && (isStringExpr(e.Left) || isStringExpr(e.Right)) {
+			return "const char*"
 		}
+		// Check if either side is a known string variable
+		if e.Operator == "+" {
+			if ident, ok := e.Left.(*parser.Identifier); ok {
+				if g.varTypes[ident.Value] == "const char*" {
+					return "const char*"
+				}
+			}
+			if ident, ok := e.Right.(*parser.Identifier); ok {
+				if g.varTypes[ident.Value] == "const char*" {
+					return "const char*"
+				}
+			}
+		}
+		return "int64_t"
+	case *parser.InterpolatedString:
+		return "const char*"
+	case *parser.CallExpression:
+		return "int64_t"
+	case *parser.Identifier:
+		if t, ok := g.varTypes[e.Value]; ok {
+			return t
+		}
+		return "int64_t"
 	}
 	return "int64_t" // default
 }

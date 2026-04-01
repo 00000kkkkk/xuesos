@@ -161,8 +161,8 @@ func TestStringLiteral(t *testing.T) {
 			xuet name = "Xuesos"
 		}
 	`)
-	assertContains(t, code, "XppString")
-	assertContains(t, code, "xpp_str(")
+	assertContains(t, code, "const char*")
+	assertContains(t, code, `"Xuesos"`)
 }
 
 func TestFibonacci(t *testing.T) {
@@ -190,4 +190,142 @@ func TestHeaders(t *testing.T) {
 	assertContains(t, code, "#include <stdlib.h>")
 	assertContains(t, code, "#include <stdint.h>")
 	assertContains(t, code, "#include <stdbool.h>")
+}
+
+func TestStringVariable(t *testing.T) {
+	code := generate(t, `xuen main() { xuet name = "world" }`)
+	assertContains(t, code, "const char*")
+	assertContains(t, code, `"world"`)
+}
+
+func TestPrintString(t *testing.T) {
+	code := generate(t, `xuen main() { print("hello") }`)
+	assertContains(t, code, "printf")
+	assertContains(t, code, "hello")
+}
+
+func TestPrintStringVariable(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuet name = "Alice"
+			print(name)
+		}
+	`)
+	assertContains(t, code, `const char* name`)
+	assertContains(t, code, `printf("%s\n", name)`)
+}
+
+func TestPrintIntVariable(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuet x = 42
+			print(x)
+		}
+	`)
+	assertContains(t, code, `printf("%lld\n", (long long)x)`)
+}
+
+func TestXuiatchStringArms(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuet x = "ok"
+			xuiatch (x) {
+				"ok" => print("good")
+				_ => print("other")
+			}
+		}
+	`)
+	assertContains(t, code, `strcmp(x, "ok") == 0`)
+	assertContains(t, code, "} else {")
+	assertContains(t, code, `printf`)
+}
+
+func TestXuiatchIntArms(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuet x = 1
+			xuiatch (x) {
+				1 => print("one")
+				2 => print("two")
+				_ => print("other")
+			}
+		}
+	`)
+	assertContains(t, code, "if ((x) == (1LL))")
+	assertContains(t, code, "} else if ((x) == (2LL))")
+	assertContains(t, code, "} else {")
+}
+
+func TestTryCatch(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xutry {
+				xuet x = 1
+			} xucatch (e) {
+				print("error")
+			}
+		}
+	`)
+	assertContains(t, code, "_xpp_has_error = 0")
+	assertContains(t, code, "if (_xpp_has_error)")
+	assertContains(t, code, "const char* e = _xpp_error_msg")
+}
+
+func TestReturnZeroInsideMain(t *testing.T) {
+	code := generate(t, `xuen main() { xuet x = 1 }`)
+	// return 0 must come before the closing brace of main
+	idx0 := strings.Index(code, "return 0;")
+	idxClose := strings.LastIndex(code, "}")
+	if idx0 < 0 || idxClose < 0 || idx0 >= idxClose {
+		t.Errorf("return 0; should be inside main before closing }, got:\n%s", code)
+	}
+}
+
+func TestStringComparisonHelper(t *testing.T) {
+	code := generate(t, `xuen main() {}`)
+	assertContains(t, code, "int xpp_streq(const char* a, const char* b)")
+	assertContains(t, code, "strcmp(a, b) == 0")
+}
+
+func TestMutableStringVariable(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuiar msg = "hi"
+		}
+	`)
+	assertContains(t, code, `const char* msg = "hi"`)
+}
+
+func TestNullLiteral(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuet x = xuinull
+		}
+	`)
+	assertContains(t, code, "NULL")
+}
+
+func TestPrintBool(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			print(xuitru)
+		}
+	`)
+	assertContains(t, code, `printf("%s\n", "true")`)
+}
+
+func TestAddressOfAndDeref(t *testing.T) {
+	code := generate(t, `
+		xuen main() {
+			xuiar x = 10
+			xuet y = &x
+		}
+	`)
+	assertContains(t, code, "&x")
+}
+
+func TestErrorHandlingGlobals(t *testing.T) {
+	code := generate(t, `xuen main() {}`)
+	assertContains(t, code, "static int _xpp_has_error")
+	assertContains(t, code, `static const char* _xpp_error_msg`)
 }
