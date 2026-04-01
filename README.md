@@ -297,6 +297,41 @@ go build -o xuesos .
 go install .
 ```
 
+## Roadmap
+
+### v0.2.0 (Current) — Feature Complete MVP
+- [x] Compiler: lexer, parser, type checker, interpreter, C codegen
+- [x] 20 xui-style keywords, structs, interfaces, enums, lambdas, closures
+- [x] Concurrency: goroutines, channels, select, WaitGroup, Mutex
+- [x] 146 built-in functions (strings, arrays, maps, math, regex, crypto, JSON, HTTP, TCP, filesystem)
+- [x] 14 CLI commands (run, build, debug, repl, fmt, vet, test, doc, env, get, lsp, version, help)
+- [x] Web Playground, VS Code extension, self-hosting compiler
+- [x] 446 tests, C runtime (996 lines), GitHub Actions CI/CD
+
+### v0.3.0 — Production Hardening
+- [ ] Bytecode VM (10-100x speedup over tree-walking)
+- [ ] LLVM IR backend
+- [ ] Generics: `xuen sort<T>(arr []T)`
+- [ ] Garbage collector (mark-and-sweep)
+- [ ] Stack traces, profiler, race detector
+- [ ] Full HTTP router with middleware
+- [ ] Database driver interface
+
+### v1.0.0 — Stable Release
+- [ ] Language specification
+- [ ] Package registry (packages.xuesos.dev)
+- [ ] Official documentation site
+- [ ] Cross-platform testing
+- [ ] Performance benchmarks vs Go/C
+
+### v2.0.0 — Advanced
+- [ ] WASM compilation target
+- [ ] Async/await
+- [ ] Algebraic data types
+- [ ] JIT compilation
+- [ ] FFI for C libraries
+- [ ] Full self-hosting compiler
+
 ## License
 
 Apache 2.0
