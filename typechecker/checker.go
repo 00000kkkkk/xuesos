@@ -271,6 +271,26 @@ func (c *Checker) registerBuiltins() {
 	c.scope.define("error_new", &FuncType{ReturnType: TypeVoid}, false)
 	c.scope.define("error_wrap", &FuncType{ReturnType: TypeVoid}, false)
 	c.scope.define("is_err", &FuncType{ReturnType: TypeBool}, false)
+
+	// Template engine built-ins
+	c.scope.define("template", &FuncType{ReturnType: TypeStr}, false)
+	c.scope.define("template_file", &FuncType{ReturnType: TypeStr}, false)
+
+	// Reflection / type inspection built-ins
+	c.scope.define("fields", &FuncType{ReturnType: &ArrayType{ElementType: TypeStr}}, false)
+	c.scope.define("get_field", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("set_field", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("type_name", &FuncType{ReturnType: TypeStr}, false)
+	c.scope.define("is_null", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_int", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_float", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_string", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_bool", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_array", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_map", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("is_func", &FuncType{ReturnType: TypeBool}, false)
+	c.scope.define("to_map", &FuncType{ReturnType: TypeVoid}, false)
+	c.scope.define("copy_val", &FuncType{ReturnType: TypeVoid}, false)
 }
 
 // Check type-checks a program and returns any errors.

@@ -1853,6 +1853,151 @@ func (i *Interpreter) registerBuiltins() {
 		}
 		return BoolValue(false), nil
 	}}, false)
+
+	// template(tmpl, data) — render template string with {{key}} placeholders from a map
+	i.globals.Define("template", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_STRING || args[1].Type != VAL_MAP {
+			return nil, fmt.Errorf("template() takes template string and data map")
+		}
+		result := args[0].StringVal
+		for _, key := range args[1].MapVal.Keys {
+			val := args[1].MapVal.Pairs[key]
+			placeholder := "{{" + key + "}}"
+			result = strings.ReplaceAll(result, placeholder, val.String())
+		}
+		return StringVal(result), nil
+	}}, false)
+
+	// template_file(path, data) — load template from file and render
+	i.globals.Define("template_file", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_STRING || args[1].Type != VAL_MAP {
+			return nil, fmt.Errorf("template_file() takes file path and data map")
+		}
+		content, err := os.ReadFile(args[0].StringVal)
+		if err != nil {
+			return nil, fmt.Errorf("template_file: %s", err)
+		}
+		result := string(content)
+		for _, key := range args[1].MapVal.Keys {
+			val := args[1].MapVal.Pairs[key]
+			placeholder := "{{" + key + "}}"
+			result = strings.ReplaceAll(result, placeholder, val.String())
+		}
+		return StringVal(result), nil
+	}}, false)
+
+	// fields(struct_val) — returns array of field names for a struct
+	i.globals.Define("fields", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRUCT {
+			return nil, fmt.Errorf("fields() takes 1 struct argument")
+		}
+		var names []*Value
+		for name := range args[0].StructVal.Fields {
+			names = append(names, StringVal(name))
+		}
+		return ArrayValue(names), nil
+	}}, false)
+
+	// get_field(struct, name) — get field value by name string
+	i.globals.Define("get_field", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 2 || args[0].Type != VAL_STRUCT || args[1].Type != VAL_STRING {
+			return nil, fmt.Errorf("get_field() takes struct and field name string")
+		}
+		val, ok := args[0].StructVal.Fields[args[1].StringVal]
+		if !ok {
+			return NullValue(), nil
+		}
+		return val, nil
+	}}, false)
+
+	// set_field(struct, name, value) — set field value by name string
+	i.globals.Define("set_field", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 3 || args[0].Type != VAL_STRUCT || args[1].Type != VAL_STRING {
+			return nil, fmt.Errorf("set_field() takes struct, field name, and value")
+		}
+		args[0].StructVal.Fields[args[1].StringVal] = args[2]
+		return NullValue(), nil
+	}}, false)
+
+	// type_name(val) — returns the struct type name or primitive type
+	i.globals.Define("type_name", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("type_name() takes 1 argument")
+		}
+		if args[0].Type == VAL_STRUCT {
+			return StringVal(args[0].StructVal.TypeName), nil
+		}
+		return StringVal(args[0].Type.String()), nil
+	}}, false)
+
+	// is_null(val) — check if value is null
+	i.globals.Define("is_null", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("is_null() takes 1 argument")
+		}
+		return BoolValue(args[0].Type == VAL_NULL), nil
+	}}, false)
+
+	// is_int(val), is_float(val), is_string(val), is_bool(val), is_array(val), is_map(val), is_func(val)
+	for _, check := range []struct {
+		name string
+		vt   ValueType
+	}{
+		{"is_int", VAL_INT}, {"is_float", VAL_FLOAT}, {"is_string", VAL_STRING},
+		{"is_bool", VAL_BOOL}, {"is_array", VAL_ARRAY}, {"is_map", VAL_MAP},
+		{"is_func", VAL_FUNCTION},
+	} {
+		vt := check.vt
+		i.globals.Define(check.name, &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+			if len(args) != 1 {
+				return nil, fmt.Errorf("type check function takes 1 argument")
+			}
+			return BoolValue(args[0].Type == vt), nil
+		}}, false)
+	}
+
+	// to_map(struct) — convert struct to map
+	i.globals.Define("to_map", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 || args[0].Type != VAL_STRUCT {
+			return nil, fmt.Errorf("to_map() takes 1 struct argument")
+		}
+		pairs := make(map[string]*Value)
+		var keys []string
+		for k, v := range args[0].StructVal.Fields {
+			pairs[k] = v
+			keys = append(keys, k)
+		}
+		return MapVal(pairs, keys), nil
+	}}, false)
+
+	// copy_val(val) — shallow copy of array/map/struct
+	i.globals.Define("copy_val", &Value{Type: VAL_BUILTIN, BuiltinVal: func(args []*Value) (*Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("copy_val() takes 1 argument")
+		}
+		switch args[0].Type {
+		case VAL_ARRAY:
+			newArr := make([]*Value, len(args[0].ArrayVal))
+			copy(newArr, args[0].ArrayVal)
+			return ArrayValue(newArr), nil
+		case VAL_MAP:
+			newPairs := make(map[string]*Value)
+			newKeys := make([]string, len(args[0].MapVal.Keys))
+			copy(newKeys, args[0].MapVal.Keys)
+			for k, v := range args[0].MapVal.Pairs {
+				newPairs[k] = v
+			}
+			return MapVal(newPairs, newKeys), nil
+		case VAL_STRUCT:
+			newFields := make(map[string]*Value)
+			for k, v := range args[0].StructVal.Fields {
+				newFields[k] = v
+			}
+			return &Value{Type: VAL_STRUCT, StructVal: &StructValue{TypeName: args[0].StructVal.TypeName, Fields: newFields}}, nil
+		default:
+			return args[0], nil // primitives are already values
+		}
+	}}, false)
 }
 
 // AddTestBuiltins adds assert functions for test files.

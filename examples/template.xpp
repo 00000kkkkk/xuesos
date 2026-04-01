@@ -1,0 +1,39 @@
+// Template engine in Xuesos++
+
+xuen main() {
+    // Simple template
+    xuet greeting = template("Hello {{name}}! Welcome to {{lang}}.", {
+        "name": "Developer",
+        "lang": "Xuesos++"
+    })
+    print(greeting)
+
+    // HTML template
+    xuet html = template("<h1>{{title}}</h1><p>{{body}}</p><footer>{{year}}</footer>", {
+        "title": "Xuesos++ Docs",
+        "body": "The fastest xui-style language",
+        "year": "2025"
+    })
+    print(html)
+
+    // Reflection
+    xuiruct User {
+        name str
+        age int
+        email str
+    }
+
+    xuet user = User { name = "Alice", age = 25, email = "alice@xuesos.dev" }
+
+    print("\nReflection:")
+    print("Type: {type_name(user)}")
+    print("Fields: {fields(user)}")
+    print("Name: {get_field(user, "name")}")
+
+    // Type checking
+    print("\nType checks:")
+    print("42 is int: {is_int(42)}")
+    print("\"hi\" is string: {is_string("hi")}")
+    print("[1] is array: {is_array([1])}")
+    print("null is null: {is_null(xuinull)}")
+}

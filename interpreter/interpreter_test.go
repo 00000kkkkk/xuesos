@@ -1711,3 +1711,68 @@ func TestErrorWrap(t *testing.T) {
 	`)
 	expectOutput(t, interp, "config loading failed: file not found")
 }
+
+func TestTemplate(t *testing.T) {
+	interp := run(t, `
+		xuet lb = from_char_code(123)
+		xuet rb = from_char_code(125)
+		xuet tmpl = "Hello " + lb + lb + "name" + rb + rb + ", age " + lb + lb + "age" + rb + rb + "!"
+		xuet result = template(tmpl, {"name": "Xuesos", "age": "1"})
+		print(result)
+	`)
+	expectOutput(t, interp, "Hello Xuesos, age 1!")
+}
+
+func TestFields(t *testing.T) {
+	interp := run(t, `
+		xuiruct Point { x int
+			y int }
+		xuet p = Point { x = 10, y = 20 }
+		xuet f = fields(p)
+		print(len(f))
+	`)
+	expectOutput(t, interp, "2")
+}
+
+func TestGetSetField(t *testing.T) {
+	interp := run(t, `
+		xuiruct Box { value int }
+		xuiar b = Box { value = 42 }
+		print(get_field(b, "value"))
+		set_field(b, "value", 99)
+		print(get_field(b, "value"))
+	`)
+	expectOutput(t, interp, "42", "99")
+}
+
+func TestTypeName(t *testing.T) {
+	interp := run(t, `
+		xuiruct Dog { name str }
+		xuet d = Dog { name = "Rex" }
+		print(type_name(d))
+		print(type_name(42))
+	`)
+	expectOutput(t, interp, "Dog", "int")
+}
+
+func TestIsTypeChecks(t *testing.T) {
+	interp := run(t, `
+		print(is_int(42))
+		print(is_string("hello"))
+		print(is_null(xuinull))
+		print(is_array([1, 2]))
+		print(is_map({"a": 1}))
+	`)
+	expectOutput(t, interp, "xuitru", "xuitru", "xuitru", "xuitru", "xuitru")
+}
+
+func TestCopyVal(t *testing.T) {
+	interp := run(t, `
+		xuiar original = [1, 2, 3]
+		xuet copied = copy_val(original)
+		push(original, 4)
+		print(len(original))
+		print(len(copied))
+	`)
+	expectOutput(t, interp, "4", "3")
+}

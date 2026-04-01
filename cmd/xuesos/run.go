@@ -32,7 +32,7 @@ func runRun(args []string) error {
 	tokens, lexErrs := l.ScanAll()
 	if len(lexErrs) > 0 {
 		for _, e := range lexErrs {
-			fmt.Fprintf(os.Stderr, "error: %s\n", e)
+			fmt.Fprint(os.Stderr, FormatErrorWithContext(string(src), e.Pos.Line, e.Pos.Column, e.Message))
 		}
 		return fmt.Errorf("lexing failed with %d error(s)", len(lexErrs))
 	}
@@ -42,7 +42,7 @@ func runRun(args []string) error {
 	program, parseErrs := p.Parse()
 	if len(parseErrs) > 0 {
 		for _, e := range parseErrs {
-			fmt.Fprintf(os.Stderr, "error: %s\n", e)
+			fmt.Fprint(os.Stderr, FormatErrorWithContext(string(src), e.Pos.Line, e.Pos.Column, e.Message))
 		}
 		return fmt.Errorf("parsing failed with %d error(s)", len(parseErrs))
 	}
@@ -53,7 +53,7 @@ func runRun(args []string) error {
 		typeErrs := tc.Check(program)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
-				fmt.Fprintf(os.Stderr, "type error: %s\n", e)
+				fmt.Fprint(os.Stderr, FormatErrorWithContext(string(src), e.Pos.Line, e.Pos.Column, e.Message))
 			}
 			return fmt.Errorf("type checking failed with %d error(s)", len(typeErrs))
 		}

@@ -24,6 +24,8 @@ func Execute(args []string) error {
 		return runVet(args[1:])
 	case "doc":
 		return runDoc(args[1:])
+	case "env":
+		return runEnv(args[1:])
 	case "lsp":
 		return runLsp()
 	case "version":
@@ -50,6 +52,7 @@ Commands:
   vet [dir]            Run static analysis on .xpp files
   fmt <file.xpp>       Format a source file
   doc [file.xpp]       Show documentation (builtins if no file)
+  env [var]            Show environment info
   version              Show compiler version
   help                 Show this help message`)
 }
